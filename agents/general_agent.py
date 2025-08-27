@@ -23,7 +23,7 @@ def general_agent_node(state: MessagesState) -> MessagesState:
             
         # Get the task description from the supervisor (last message)
         last_message = state["messages"][-1]
-        task_description = last_message.get("content", "")
+        task_description = last_message.content if hasattr(last_message, 'content') else str(last_message)
         
         # Get the full conversation context
         conversation_context = ""
@@ -31,7 +31,7 @@ def general_agent_node(state: MessagesState) -> MessagesState:
             # Include previous messages for context (skip the supervisor's task description)
             context_messages = state["messages"][:-1]
             conversation_context = "\n".join([
-                f"{msg.get('role', 'unknown')}: {msg.get('content', '')}"
+                f"{msg.type if hasattr(msg, 'type') else 'unknown'}: {msg.content if hasattr(msg, 'content') else str(msg)}"
                 for msg in context_messages[-5:]  # Last 5 messages for context
             ])
         

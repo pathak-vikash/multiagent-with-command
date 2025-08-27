@@ -417,12 +417,6 @@ Each agent is equipped with:
 
 ---
 
-**Built with ❤️ using LangGraph and LangChain**
-
-*This system demonstrates advanced multi-agent orchestration with real business tool integration, providing a foundation for building sophisticated AI-powered business applications.*
-
----
-
 ## 📊 Repository Statistics
 
 - **Total Files**: 47 files

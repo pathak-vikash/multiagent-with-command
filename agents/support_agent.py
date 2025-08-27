@@ -5,6 +5,7 @@ Support agent node following the official LangGraph pattern.
 import traceback
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import MessagesState
+from langgraph.prebuilt import create_react_agent
 from schemas.intent_analysis import AgentType
 from tools.support_tools import create_support_ticket, check_warranty_status, escalate_ticket
 from utils.llm_helpers import create_llm_client
@@ -23,7 +24,7 @@ def support_agent_node(state: MessagesState) -> MessagesState:
             
         # Get the task description from the supervisor (last message)
         last_message = state["messages"][-1]
-        task_description = last_message.get("content", "")
+        task_description = last_message.content if hasattr(last_message, 'content') else str(last_message)
         
         # Get the full conversation context
         conversation_context = ""
@@ -31,7 +32,7 @@ def support_agent_node(state: MessagesState) -> MessagesState:
             # Include previous messages for context (skip the supervisor's task description)
             context_messages = state["messages"][:-1]
             conversation_context = "\n".join([
-                f"{msg.get('role', 'unknown')}: {msg.get('content', '')}"
+                f"{msg.type if hasattr(msg, 'type') else 'unknown'}: {msg.content if hasattr(msg, 'content') else str(msg)}"
                 for msg in context_messages[-5:]  # Last 5 messages for context
             ])
         
@@ -40,63 +41,45 @@ def support_agent_node(state: MessagesState) -> MessagesState:
         # Create LLM client
         llm = create_llm_client()
         
-        # Create a prompt for support handling with tools
-        prompt = ChatPromptTemplate.from_template("""
-        You are a customer support agent with access to support tools. Your role is to:
-        
-        1. Handle customer support issues, warranty claims, and technical problems
-        2. Create support tickets and track issues using the available tools
-        3. Be empathetic and helpful
-        4. Remember details from the conversation and build upon them
-        
-        Available tools:
-        - create_support_ticket(issue, priority): Create a new support ticket
-        - check_warranty_status(customer_id): Check warranty status for a customer
-        - escalate_ticket(ticket_id, reason): Escalate a support ticket
-        
-        Previous conversation context:
-        {conversation_context}
-        
-        Current user request: {message}
-        
-        Instructions:
-        - If the user has a support issue, use the create_support_ticket tool
-        - If the user wants to check warranty status, use the check_warranty_status tool
-        - If the user wants to escalate an issue, use the escalate_ticket tool
-        - If the user is providing additional details about their issue, acknowledge what you already know
-        - If this is a new support request, ask for the necessary details
-        - Be empathetic and reference previous parts of the conversation when relevant
-        - If the user mentions specific problems, services, or previous interactions, acknowledge them
-        
-        Respond in an empathetic, helpful manner that builds upon the conversation context.
-        """)
-        
-        # Create the agent with tools
-        from langchain.agents import create_react_agent
-        from langchain.agents import AgentExecutor
-        
         # Get the tools
         tools = [create_support_ticket, check_warranty_status, escalate_ticket]
         
-        # Create the agent
-        agent = create_react_agent(llm, tools, prompt)
-        agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+        # Create the agent using LangGraph pattern
+        agent = create_react_agent(
+            model=llm,
+            tools=tools,
+            prompt=(
+                "You are a customer support agent with access to support tools. Your role is to:\n"
+                "1. Handle customer support issues, warranty claims, and technical problems\n"
+                "2. Create support tickets and track issues using the available tools\n"
+                "3. Be empathetic and helpful\n"
+                "4. Remember details from the conversation and build upon them\n\n"
+                "Available tools:\n"
+                "- create_support_ticket(issue, priority): Create a new support ticket\n"
+                "- check_warranty_status(customer_id): Check warranty status for a customer\n"
+                "- escalate_ticket(ticket_id, reason): Escalate a support ticket\n\n"
+                "Previous conversation context:\n"
+                f"{conversation_context}\n\n"
+                "Current user request: {task_description}\n\n"
+                "Instructions:\n"
+                "- If the user has a support issue, use the create_support_ticket tool\n"
+                "- If the user wants to check warranty status, use the check_warranty_status tool\n"
+                "- If the user wants to escalate an issue, use the escalate_ticket tool\n"
+                "- If the user is providing additional details about their issue, acknowledge what you already know\n"
+                "- If this is a new support request, ask for the necessary details\n"
+                "- Be empathetic and reference previous parts of the conversation when relevant\n"
+                "- If the user mentions specific problems, services, or previous interactions, acknowledge them\n\n"
+                "Respond in an empathetic, helpful manner that builds upon the conversation context."
+            ),
+            name="support_agent"
+        )
         
         # Generate response
-        response = agent_executor.invoke({
-            "message": task_description,
-            "conversation_context": conversation_context
-        })
-        
-        # Add the response to messages
-        state["messages"].append({
-            "role": "assistant",
-            "content": response["output"]
-        })
+        response = agent.invoke(state)
         
         logger.info("Support agent provided response")
         logger.info("Support agent node completed successfully")
-        return state
+        return response
         
     except Exception as e:
         logger.error(f"Error in support agent node: {str(e)}")

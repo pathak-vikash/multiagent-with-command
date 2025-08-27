@@ -57,25 +57,25 @@ def process_message(message: str, conversation_history: list = None):
             # Check if we have a final response
             if "messages" in chunk and len(chunk["messages"]) > 0:
                 last_message = chunk["messages"][-1]
-                if last_message["role"] == "assistant":
+                if hasattr(last_message, 'type') and last_message.type == "ai":
                     response_received = True
-                    logger.info(f"Response received: {last_message['content'][:100]}...")
+                    logger.info(f"Response received: {last_message.content[:100]}...")
             
             # Also check for any assistant messages in the entire chunk
             if "messages" in chunk:
                 for msg in chunk["messages"]:
-                    if msg.get("role") == "assistant" and msg.get("content"):
+                    if hasattr(msg, 'type') and msg.type == "ai" and hasattr(msg, 'content') and msg.content:
                         response_received = True
-                        logger.info(f"Response found in chunk: {msg['content'][:100]}...")
+                        logger.info(f"Response found in chunk: {msg.content[:100]}...")
                         break
             
             # Check for nested messages in agent chunks (e.g., general_agent, appointment_agent, etc.)
             for key, value in chunk.items():
                 if isinstance(value, dict) and "messages" in value:
                     for msg in value["messages"]:
-                        if msg.get("role") == "assistant" and msg.get("content"):
+                        if hasattr(msg, 'type') and msg.type == "ai" and hasattr(msg, 'content') and msg.content:
                             response_received = True
-                            logger.info(f"Response found in {key} chunk: {msg['content'][:100]}...")
+                            logger.info(f"Response found in {key} chunk: {msg.content[:100]}...")
                             break
         
         logger.info(f"Graph execution completed. Response received: {response_received}")
@@ -199,15 +199,15 @@ def main():
                     for result in results:
                         if "messages" in result and len(result["messages"]) > 0:
                             last_message = result["messages"][-1]
-                            if last_message["role"] == "assistant":
-                                final_response = last_message["content"]
+                            if hasattr(last_message, 'type') and last_message.type == "ai":
+                                final_response = last_message.content
                         
                         # Check for nested messages in agent chunks
                         for key, value in result.items():
                             if isinstance(value, dict) and "messages" in value:
                                 for msg in value["messages"]:
-                                    if msg.get("role") == "assistant" and msg.get("content"):
-                                        final_response = msg["content"]
+                                    if hasattr(msg, 'type') and msg.type == "ai" and hasattr(msg, 'content') and msg.content:
+                                        final_response = msg.content
                                         break
                     
                     if final_response:
