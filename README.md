@@ -416,3 +416,18 @@ Each agent is equipped with:
 - `uv`: Fast Python package manager
 
 ---
+
+**Built with ❤️ using LangGraph and LangChain**
+
+*This system demonstrates advanced multi-agent orchestration with real business tool integration, providing a foundation for building sophisticated AI-powered business applications.*
+
+---
+
+## 📊 Repository Statistics
+
+- **Total Files**: 47 files
+- **Lines of Code**: 11,555+ lines
+- **Agents**: 5 specialized agents
+- **Tools**: 12 functional business tools
+- **Interfaces**: Web (Streamlit) + Console
+- **Architecture**: LangGraph Supervisor Pattern
