@@ -62,23 +62,23 @@ def get_handoff_tools():
     """Get all handoff tools for the supervisor"""
     return [
         create_task_description_handoff_tool(
-            agent_name="general_agent",
+            agent_name="general",
             description="Transfer to general agent for casual conversation, greetings, and general inquiries."
         ),
         create_task_description_handoff_tool(
-            agent_name="appointment_agent", 
+            agent_name="appointment", 
             description="Transfer to appointment agent for booking appointments, scheduling, and calendar management."
         ),
         create_task_description_handoff_tool(
-            agent_name="support_agent",
+            agent_name="support",
             description="Transfer to support agent for customer support, warranty claims, and technical issues."
         ),
         create_task_description_handoff_tool(
-            agent_name="estimate_agent",
+            agent_name="estimate",
             description="Transfer to estimate agent for price quotes, cost estimates, and pricing information."
         ),
         create_task_description_handoff_tool(
-            agent_name="advisor_agent",
+            agent_name="advisor",
             description="Transfer to advisor agent for business information, service details, and recommendations."
         )
     ]
@@ -86,9 +86,9 @@ def get_handoff_tools():
 def get_agent_descriptions():
     """Get descriptions of all available agents"""
     return {
-        "general_agent": "Handles casual conversation, greetings, and general inquiries",
-        "appointment_agent": "Handles appointment booking, scheduling, and calendar management", 
-        "support_agent": "Handles customer support, warranty claims, and technical issues",
-        "estimate_agent": "Handles price quotes, cost estimates, and pricing information",
-        "advisor_agent": "Handles business information, service details, and recommendations"
+        "general": "Handles casual conversation, greetings, and general inquiries",
+        "appointment": "Handles appointment booking, scheduling, and calendar management", 
+        "support": "Handles customer support, warranty claims, and technical issues",
+        "estimate": "Handles price quotes, cost estimates, and pricing information",
+        "advisor": "Handles business information, service details, and recommendations"
     }

@@ -10,7 +10,7 @@ from langchain_core.messages import HumanMessage
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from graph import get_supervisor_graph
+from orchestration.graph import get, get_info
 from core.logger import logger
 from utils.llm_helpers import initialize_langsmith
 
@@ -23,7 +23,7 @@ def process_message(message: str, conversation_history: list = None):
         logger.info(f"📨 Processing: {message[:50]}...")
         
         # Get the supervisor graph from centralized module
-        supervisor_graph = get_supervisor_graph()
+        supervisor_graph = get()
         
         # Build the initial state from conversation history
         initial_messages = []
@@ -255,7 +255,7 @@ def main():
     
     # Get graph information
     try:
-        graph_info = get_graph_info()
+        graph_info = get_info()
         st.sidebar.markdown(f"**Graph Nodes:** {len(graph_info['nodes'])}")
         st.sidebar.markdown(f"**Routing:** {graph_info['routing_method']}")
         

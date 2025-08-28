@@ -6,7 +6,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 # Import our centralized graph module
-from graph import get_supervisor_graph, get_graph_info
+from orchestration.graph import get, get_info
 from utils.llm_helpers import initialize_langsmith
 
 def run_demo_mode():
@@ -17,11 +17,11 @@ def run_demo_mode():
     # Initialize LangSmith tracing
     initialize_langsmith()
     
-    supervisor_graph = get_supervisor_graph()
+    supervisor_graph = get()
     print("✅ Supervisor graph created successfully!")
     
     # Display graph information
-    graph_info = get_graph_info()
+    graph_info = get_info()
     print(f"📊 Graph Info: {len(graph_info['nodes'])} nodes, {graph_info['routing_method']}")
     
     # Example conversations
@@ -120,11 +120,11 @@ def run_interactive_mode():
     # Initialize LangSmith tracing
     initialize_langsmith()
     
-    supervisor_graph = get_supervisor_graph()
+    supervisor_graph = get()
     print("✅ Supervisor graph created successfully!")
     
     # Display graph information
-    graph_info = get_graph_info()
+    graph_info = get_info()
     print(f"📊 Graph Info: {len(graph_info['nodes'])} nodes, {graph_info['routing_method']}")
     
     print(f"\n{'='*80}")

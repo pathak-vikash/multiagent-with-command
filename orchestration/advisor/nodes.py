@@ -1,22 +1,22 @@
 """
-Advisor agent node following the official LangGraph pattern.
+Advisor agent sub-graph nodes.
+
+This module contains the agent node for business information and recommendations.
 """
 
 import traceback
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import MessagesState
 from langgraph.prebuilt import create_react_agent
-from schemas.intent_analysis import AgentType
 from tools.advisor_tools import get_service_info, get_business_hours, get_contact_info
 from utils.llm_helpers import create_llm_client
 from core.logger import logger
+from .state import State
 
-def advisor_agent_node(state: MessagesState) -> MessagesState:
-    """Advisor agent node that handles business information and recommendations"""
+def advisor_agent(state) -> State:
+    """Advisor agent that provides business information and recommendations"""
     
     try:
-        logger.info("Advisor agent node starting")
-        
         # Get all messages to understand the full conversation context
         if not state["messages"]:
             logger.warning("No messages in state")
@@ -36,7 +36,11 @@ def advisor_agent_node(state: MessagesState) -> MessagesState:
                 for msg in context_messages[-5:]  # Last 5 messages for context
             ])
         
-        logger.info(f"Processing advisor task: {task_description[:100]}...")
+        logger.info(f"📋 Advisor agent processing: {task_description[:50]}...")
+        
+        # Set workflow step if state supports it
+        if hasattr(state, 'set_workflow_step'):
+            state.set_workflow_step("business_advice")
         
         # Create LLM client
         llm = create_llm_client()
@@ -50,26 +54,24 @@ def advisor_agent_node(state: MessagesState) -> MessagesState:
             tools=tools,
             prompt=(
                 "You are an advisor agent with access to business information tools. Your role is to:\n"
-                "1. Provide business information, service details, and recommendations\n"
-                "2. Answer questions about company services and policies using the available tools\n"
-                "3. Be knowledgeable and helpful\n"
-                "4. Remember details from the conversation and build upon them\n\n"
+                "1. Provide business information and recommendations\n"
+                "2. Share service details and capabilities\n"
+                "3. Provide business hours and contact information\n"
+                "4. Be knowledgeable and helpful\n\n"
                 "Available tools:\n"
-                "- get_service_info(service): Get detailed information about a specific service\n"
-                "- get_business_hours(): Get business hours information\n"
+                "- get_service_info(service_type): Get detailed service information\n"
+                "- get_business_hours(): Get current business hours\n"
                 "- get_contact_info(): Get contact information\n\n"
                 "Previous conversation context:\n"
                 f"{conversation_context}\n\n"
                 "Current user request: {task_description}\n\n"
                 "Instructions:\n"
-                "- If the user asks about a specific service, use the get_service_info tool\n"
-                "- If the user asks about business hours, use the get_business_hours tool\n"
-                "- If the user asks for contact information, use the get_contact_info tool\n"
-                "- If the user is asking follow-up questions about previously discussed services, reference the earlier conversation\n"
-                "- If this is a new inquiry, provide comprehensive information\n"
-                "- Be knowledgeable and reference previous parts of the conversation when relevant\n"
-                "- If the user mentions specific services, policies, or previous discussions, acknowledge them\n\n"
-                "Respond in a knowledgeable, helpful manner that builds upon the conversation context."
+                "- If the user asks about services, use get_service_info\n"
+                "- If the user asks about hours, use get_business_hours\n"
+                "- If the user asks about contact info, use get_contact_info\n"
+                "- Provide helpful recommendations based on user needs\n"
+                "- Remember details from the conversation and build upon them\n\n"
+                "Respond in a helpful, professional manner that builds upon the conversation context."
             ),
             name="advisor_agent"
         )
@@ -77,13 +79,10 @@ def advisor_agent_node(state: MessagesState) -> MessagesState:
         # Generate response
         response = agent.invoke(state)
         
-        logger.info("Advisor agent provided response")
-        logger.info("Advisor agent node completed successfully")
+        logger.info("✅ Advisor agent completed")
         return response
         
     except Exception as e:
-        logger.error(f"Error in advisor agent node: {str(e)}")
+        logger.error(f"❌ Error in advisor agent: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise
-
-
