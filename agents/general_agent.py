@@ -4,6 +4,7 @@ General agent node following the official LangGraph pattern.
 
 import traceback
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import AIMessage
 from langgraph.graph import MessagesState
 from schemas.agent_responses import AgentResponse
 from schemas.intent_analysis import AgentType, IntentType
@@ -14,8 +15,6 @@ def general_agent_node(state: MessagesState) -> MessagesState:
     """General agent node that handles casual conversation"""
     
     try:
-        logger.info("General agent node starting")
-        
         # Get all messages to understand the full conversation context
         if not state["messages"]:
             logger.warning("No messages in state")
@@ -35,7 +34,7 @@ def general_agent_node(state: MessagesState) -> MessagesState:
                 for msg in context_messages[-5:]  # Last 5 messages for context
             ])
         
-        logger.info(f"Processing general task: {task_description[:100]}...")
+        logger.info(f"🤖 General agent processing: {task_description[:50]}...")
         
         # Create LLM client
         llm = create_llm_client()
@@ -71,16 +70,12 @@ def general_agent_node(state: MessagesState) -> MessagesState:
         })
         
         # Add the response to messages
-        state["messages"].append({
-            "role": "assistant",
-            "content": response.content
-        })
+        state["messages"].append(AIMessage(content=response.content))
         
-        logger.info("General agent provided response")
-        logger.info("General agent node completed successfully")
+        logger.info("✅ General agent completed")
         return state
         
     except Exception as e:
-        logger.error(f"Error in general agent node: {str(e)}")
+        logger.error(f"❌ Error in general agent: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise

@@ -12,6 +12,31 @@ from core.logger import logger
 # Load environment variables from .env file
 load_dotenv()
 
+def initialize_langsmith():
+    """Initialize LangSmith configuration for tracing and monitoring"""
+    try:
+        # Check if LangSmith is configured
+        langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
+        langsmith_project = os.getenv("LANGSMITH_PROJECT", "langgraph-multi-agent-system")
+        langsmith_tracing = os.getenv("LANGSMITH_TRACING", "false").lower() == "true"
+        
+        if langsmith_api_key and langsmith_tracing:
+            # Set LangSmith environment variables
+            os.environ["LANGSMITH_TRACING"] = "true"
+            os.environ["LANGSMITH_PROJECT"] = langsmith_project
+            os.environ["LANGSMITH_ENDPOINT"] = os.getenv("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com")
+            
+            logger.info(f"🔍 LangSmith tracing enabled for project: {langsmith_project}")
+            logger.info(f"📊 View traces at: https://smith.langchain.com/o/default/projects/p/{langsmith_project}")
+            return True
+        else:
+            logger.info("🔍 LangSmith tracing disabled (set LANGSMITH_API_KEY and LANGSMITH_TRACING=true to enable)")
+            return False
+            
+    except Exception as e:
+        logger.warning(f"Failed to initialize LangSmith: {str(e)}")
+        return False
+
 def create_llm_client() -> ChatOpenAI:
     """Create and configure the LLM client"""
     try:

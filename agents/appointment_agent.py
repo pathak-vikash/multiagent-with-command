@@ -15,8 +15,6 @@ def appointment_agent_node(state: MessagesState) -> MessagesState:
     """Appointment agent node that handles appointment booking and scheduling"""
     
     try:
-        logger.info("Appointment agent node starting")
-        
         # Get all messages to understand the full conversation context
         if not state["messages"]:
             logger.warning("No messages in state")
@@ -36,7 +34,7 @@ def appointment_agent_node(state: MessagesState) -> MessagesState:
                 for msg in context_messages[-5:]  # Last 5 messages for context
             ])
         
-        logger.info(f"Processing appointment task: {task_description[:100]}...")
+        logger.info(f"📅 Appointment agent processing: {task_description[:50]}...")
         
         # Create LLM client
         llm = create_llm_client()
@@ -77,12 +75,11 @@ def appointment_agent_node(state: MessagesState) -> MessagesState:
         # Generate response
         response = agent.invoke(state)
         
-        logger.info("Appointment agent provided response")
-        logger.info("Appointment agent node completed successfully")
+        logger.info("✅ Appointment agent completed")
         return response
         
     except Exception as e:
-        logger.error(f"Error in appointment agent node: {str(e)}")
+        logger.error(f"❌ Error in appointment agent: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise
 

@@ -1,18 +1,18 @@
-import streamlit as st
 import os
-import json
-import logging
+import sys
 import traceback
 from datetime import datetime
-from dotenv import load_dotenv
+from pathlib import Path
+import streamlit as st
 from langchain_core.messages import HumanMessage
 
-# Import our centralized graph module
-from graph import get_supervisor_graph, get_graph_info
-from core.logger import logger
+# Add the project root to the Python path
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
 
-# Load environment variables
-load_dotenv()
+from graph import get_supervisor_graph
+from core.logger import logger
+from utils.llm_helpers import initialize_langsmith
 
 def process_message(message: str, conversation_history: list = None):
     """Process a single message through the supervisor system"""
@@ -20,7 +20,7 @@ def process_message(message: str, conversation_history: list = None):
         conversation_history = []
     
     try:
-        logger.info(f"Processing message: {message[:100]}...")
+        logger.info(f"📨 Processing: {message[:50]}...")
         
         # Get the supervisor graph from centralized module
         supervisor_graph = get_supervisor_graph()
@@ -44,8 +44,7 @@ def process_message(message: str, conversation_history: list = None):
             "messages": initial_messages
         }
         
-        logger.info(f"Initial state has {len(initial_messages)} messages")
-        logger.info("Starting graph execution")
+        logger.info(f"🔄 Starting graph execution ({len(initial_messages)} messages)")
         
         # Stream the conversation and collect all results
         results = []
@@ -59,14 +58,14 @@ def process_message(message: str, conversation_history: list = None):
                 last_message = chunk["messages"][-1]
                 if hasattr(last_message, 'type') and last_message.type == "ai":
                     response_received = True
-                    logger.info(f"Response received: {last_message.content[:100]}...")
+                    logger.info(f"✅ Response received: {last_message.content[:50]}...")
             
             # Also check for any assistant messages in the entire chunk
             if "messages" in chunk:
                 for msg in chunk["messages"]:
                     if hasattr(msg, 'type') and msg.type == "ai" and hasattr(msg, 'content') and msg.content:
                         response_received = True
-                        logger.info(f"Response found in chunk: {msg.content[:100]}...")
+                        logger.info(f"✅ Response found in chunk: {msg.content[:50]}...")
                         break
             
             # Check for nested messages in agent chunks (e.g., general_agent, appointment_agent, etc.)
@@ -75,15 +74,14 @@ def process_message(message: str, conversation_history: list = None):
                     for msg in value["messages"]:
                         if hasattr(msg, 'type') and msg.type == "ai" and hasattr(msg, 'content') and msg.content:
                             response_received = True
-                            logger.info(f"Response found in {key} chunk: {msg.content[:100]}...")
+                            logger.info(f"✅ Response found in {key}: {msg.content[:50]}...")
                             break
         
-        logger.info(f"Graph execution completed. Response received: {response_received}")
-        logger.info(f"Total chunks received: {len(results)}")
+        logger.info(f"🎯 Graph completed - Response: {response_received}, Chunks: {len(results)}")
         
         # If no response was received, add a fallback
         if not response_received:
-            logger.warning("No response received from graph, adding fallback")
+            logger.warning("⚠️ No response received, adding fallback")
             results.append({
                 "messages": [{"role": "assistant", "content": "I apologize, but I couldn't process your request. Please try again."}],
                 "error": "No response generated"
@@ -91,7 +89,7 @@ def process_message(message: str, conversation_history: list = None):
         
         return results
     except Exception as e:
-        logger.error(f"Error processing message: {e}")
+        logger.error(f"❌ Error processing message: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         return [{"error": str(e)}]
 
@@ -110,6 +108,9 @@ def main():
         st.error("❌ OPENAI_API_KEY environment variable is required")
         st.info("Please set your OpenAI API key in the .env file")
         return
+    
+    # Initialize LangSmith tracing
+    initialize_langsmith()
     
     # Sidebar with predefined questions
     st.sidebar.header("💡 Predefined Questions")

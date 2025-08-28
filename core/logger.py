@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from loguru import logger
 import logging
+from functools import wraps
+import time
 
 # Create logs directory if it doesn't exist
 logs_dir = Path("logs")
@@ -15,12 +17,13 @@ logs_dir.mkdir(exist_ok=True)
 # Remove default logger
 logger.remove()
 
-# Add console logger with color
+# Add console logger with color (only essential info)
 logger.add(
     sys.stdout,
-    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan> - <level>{message}</level>",
     level="INFO",
-    colorize=True
+    colorize=True,
+    filter=lambda record: record["level"].name in ["INFO", "WARNING", "ERROR"] and not record["message"].startswith("Processing")
 )
 
 # Add file logger for application logs (INFO and above)
@@ -28,13 +31,13 @@ logger.add(
     "logs/application.log",
     format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
     level="INFO",
-    rotation="100 MB",
-    retention="7 days",
+    rotation="50 MB",
+    retention="3 days",
     compression=None,
     backtrace=True,
     diagnose=True,
     enqueue=True,
-    filter=lambda record: record["name"].startswith(("agents.", "core.", "utils.", "graph", "streamlit_app", "main"))  # Only log our application modules
+    filter=lambda record: record["name"].startswith(("agents.", "core.", "utils.", "graph", "streamlit_app", "main"))
 )
 
 # Add error file logger for errors only
@@ -43,12 +46,12 @@ logger.add(
     format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
     level="ERROR",
     rotation="10 MB",
-    retention="30 days",
+    retention="7 days",
     compression=None,
     backtrace=True,
     diagnose=True,
     enqueue=True,
-    filter=lambda record: record["name"].startswith(("agents.", "core.", "utils.", "graph", "streamlit_app", "main"))  # Only log our application modules
+    filter=lambda record: record["name"].startswith(("agents.", "core.", "utils.", "graph", "streamlit_app", "main"))
 )
 
 # Intercept standard logging and redirect to loguru (but only for our application)

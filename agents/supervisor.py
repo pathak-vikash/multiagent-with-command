@@ -39,24 +39,22 @@ def supervisor_node(state: MessagesState) -> MessagesState:
     """Supervisor node function that can be used in the graph"""
     
     try:
-        logger.info("Supervisor node starting")
-        
         # Create the supervisor agent
         supervisor_agent = create_supervisor_agent()
         
         # Run the supervisor agent
         result = supervisor_agent.invoke(state)
         
-        logger.info("Supervisor node completed successfully")
+        logger.info("✅ Supervisor completed")
         return result
         
     except ParentCommand as pc:
         # This is the expected behavior when handoff tools are used
-        logger.info(f"Supervisor transferring to agent via ParentCommand")
+        logger.info(f"🔄 Supervisor transferring to agent")
         # Re-raise the ParentCommand to let LangGraph handle the transfer
         raise
         
     except Exception as e:
-        logger.error(f"Error in supervisor node: {str(e)}")
+        logger.error(f"❌ Error in supervisor: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise

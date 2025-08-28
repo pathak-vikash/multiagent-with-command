@@ -7,11 +7,16 @@ from dotenv import load_dotenv
 
 # Import our centralized graph module
 from graph import get_supervisor_graph, get_graph_info
+from utils.llm_helpers import initialize_langsmith
 
 def run_demo_mode():
     """Run the system in demo mode with predefined examples"""
     
     print("🚀 Initializing LangGraph Supervisor System...")
+    
+    # Initialize LangSmith tracing
+    initialize_langsmith()
+    
     supervisor_graph = get_supervisor_graph()
     print("✅ Supervisor graph created successfully!")
     
@@ -111,6 +116,10 @@ def run_interactive_mode():
     """Run the system in interactive console mode"""
     
     print("🚀 Initializing LangGraph Supervisor System...")
+    
+    # Initialize LangSmith tracing
+    initialize_langsmith()
+    
     supervisor_graph = get_supervisor_graph()
     print("✅ Supervisor graph created successfully!")
     
