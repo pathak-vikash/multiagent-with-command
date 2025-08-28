@@ -1,0 +1,406 @@
+# LangGraph Multi-Agent Orchestration System - Coding Guidelines
+
+## 🚨 STRICT RULE: Always Follow Official Documentation
+**NEVER assume anything - always refer to and follow the official documentation:**
+- LangGraph: https://langchain-ai.github.io/langgraph/
+- LangChain: https://python.langchain.com/
+- Pydantic: https://docs.pydantic.dev/
+- Streamlit: https://docs.streamlit.io/
+
+## 📁 Project Structure & Architecture
+
+### Directory Organization
+```
+orchestration/          # Main orchestration system
+├── graph.py           # Main orchestration graph
+├── state.py           # Main state management  
+├── nodes.py           # Centralized agent node references
+├── supervisor/        # Supervisor sub-graph
+├── general/           # General agent sub-graph
+├── appointment/       # Appointment sub-graph (SOP Collector + Booking Agent)
+├── support/           # Support sub-graph
+├── estimate/          # Estimate sub-graph
+└── advisor/           # Advisor sub-graph
+
+tools/                 # Functional business tools
+schemas/               # Pydantic data models
+utils/                 # Utility modules
+core/                  # Core system components
+```
+
+### File Naming Conventions
+- Use snake_case for all Python files and directories
+- Use descriptive names that indicate purpose: `appointment_tools.py`, `intent_analysis.py`
+- Follow the established pattern: `graph.py`, `state.py`, `nodes.py` in each sub-graph
+
+## 🏗️ LangGraph Architecture Patterns
+
+### State Management (CRITICAL)
+**ALWAYS follow LangGraph's official state patterns:**
+
+```python
+from langgraph.graph import MessagesState
+from typing import Dict, Any, Optional, List, TypedDict, Annotated
+from operator import add
+
+# Use TypedDict for performance (as recommended in LangGraph docs)
+class OrchestrationState(TypedDict):
+    """State schema following LangGraph patterns"""
+    messages: Annotated[List[Any], add]  # Handled by MessagesState
+    # ... other fields
+
+class State(MessagesState):
+    """Extended state class following LangGraph patterns"""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Initialize with default values
+        self["field_name"] = default_value
+```
+
+### Graph Creation Pattern
+**Follow the exact LangGraph supervisor pattern:**
+
+```python
+from langgraph.graph import StateGraph, START, END
+
+def create():
+    """Create the complete graph following LangGraph patterns"""
+    workflow = StateGraph(State)
+    
+    # Add nodes
+    workflow.add_node("node_name", node_function)
+    
+    # Add entry point
+    workflow.add_edge(START, "supervisor")
+    
+    # Agents end conversation (prevent infinite loops)
+    workflow.add_edge("agent_name", END)
+    
+    return workflow.compile()
+```
+
+### Sub-Graph Pattern
+**Each agent sub-graph must follow this structure:**
+- `graph.py`: Graph creation and compilation
+- `state.py`: State management extending MessagesState
+- `nodes.py`: Agent node implementations
+- `__init__.py`: Package exports
+
+## 🛠️ Tool Implementation Standards
+
+### LangChain Tool Pattern
+**ALWAYS use the official LangChain tool decorator:**
+
+```python
+from langchain_core.tools import tool
+
+@tool
+def tool_name(param1: str, param2: str = None) -> str:
+    """Clear, descriptive docstring explaining what the tool does."""
+    try:
+        # Implementation with proper error handling
+        result = perform_operation(param1, param2)
+        return f"Success: {result}"
+    except Exception as e:
+        return f"Error: {str(e)}"
+```
+
+### Tool Requirements
+- **Error Handling**: Always wrap in try-catch blocks
+- **Return Values**: Return descriptive strings, not complex objects
+- **Validation**: Validate inputs before processing
+- **Logging**: Use the centralized logger for debugging
+
+## 📊 Pydantic Schema Standards
+
+### Schema Definition Pattern
+**Follow Pydantic v2 patterns exactly:**
+
+```python
+from pydantic import BaseModel, Field
+from typing import List, Dict, Any, Optional, Literal
+from enum import Enum
+
+class IntentType(str, Enum):
+    """Use str, Enum for string enums"""
+    GREETING = "greeting"
+    APPOINTMENT = "appointment"
+
+class SchemaName(BaseModel):
+    """Schema following Pydantic v2 patterns"""
+    field_name: str = Field(description="Clear description")
+    optional_field: Optional[str] = Field(default=None, description="Optional field")
+    list_field: List[str] = Field(description="List of items")
+```
+
+### Schema Requirements
+- **Field Descriptions**: Always provide clear descriptions for LLM understanding
+- **Type Hints**: Use proper typing with Optional, List, Dict, etc.
+- **Validation**: Use Field constraints where appropriate (ge, le, min_length, etc.)
+- **Enums**: Use str, Enum for string-based enums
+
+## 🔧 Agent Implementation Standards
+
+### ReAct Agent Pattern
+**Use LangGraph's create_react_agent pattern:**
+
+```python
+from langgraph.prebuilt import create_react_agent
+from langchain_core.prompts import ChatPromptTemplate
+
+def agent_node(state) -> State:
+    """Agent node following LangGraph patterns"""
+    try:
+        # Get task description from state
+        last_message = state["messages"][-1]
+        task_description = last_message.content
+        
+        # Create LLM client
+        llm = create_llm_client()
+        
+        # Create agent with tools
+        agent = create_react_agent(
+            model=llm,
+            tools=tools,
+            prompt=ChatPromptTemplate.from_template("..."),
+            name="agent_name"
+        )
+        
+        # Generate response
+        response = agent.invoke(state)
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error in agent: {str(e)}")
+        raise
+```
+
+### Agent Requirements
+- **Error Handling**: Comprehensive try-catch with logging
+- **State Management**: Proper state access and modification
+- **Tool Integration**: Use the appropriate tools for the agent's domain
+- **Prompt Engineering**: Clear, specific prompts for the agent's role
+
+## 📝 Logging Standards
+
+### Centralized Logging
+**ALWAYS use the centralized logger from core.logger:**
+
+```python
+from core.logger import logger
+
+# Use appropriate log levels
+logger.debug("Debug information")
+logger.info("General information")
+logger.warning("Warning messages")
+logger.error("Error messages with traceback")
+```
+
+### Logging Requirements
+- **Import**: Always import from `core.logger`
+- **Levels**: Use appropriate log levels (debug, info, warning, error)
+- **Context**: Include relevant context in log messages
+- **Error Logging**: Include traceback for errors
+
+## 🔄 Handoff and Routing Patterns
+
+### Supervisor Pattern
+**Follow the exact LangGraph supervisor pattern with handoff tools:**
+
+```python
+from langgraph.errors import ParentCommand
+
+def supervisor(state) -> State:
+    """Supervisor following LangGraph patterns"""
+    try:
+        # Create agent with handoff tools
+        tools = get_handoff_tools()
+        agent = create_react_agent(model=llm, tools=tools, prompt=prompt)
+        
+        # Generate response
+        response = agent.invoke(state)
+        return response
+        
+    except ParentCommand as pc:
+        # Expected behavior for handoffs
+        logger.info("Supervisor transferring to agent")
+        raise  # Re-raise to let LangGraph handle transfer
+```
+
+### Handoff Requirements
+- **ParentCommand**: Always catch and re-raise ParentCommand
+- **Tool Usage**: Use handoff tools for agent transfers
+- **State Preservation**: Maintain conversation context during transfers
+- **Logging**: Log transfer decisions and outcomes
+
+## 🎯 Code Quality Standards
+
+### Import Organization
+```python
+# Standard library imports
+import os
+import sys
+from datetime import datetime
+from typing import Dict, Any, Optional, List
+
+# Third-party imports
+from langgraph.graph import StateGraph, START, END
+from langchain_core.tools import tool
+from pydantic import BaseModel, Field
+
+# Local imports
+from core.logger import logger
+from utils.llm_helpers import create_llm_client
+from .state import State
+```
+
+### Function Documentation
+**ALWAYS include comprehensive docstrings:**
+
+```python
+def function_name(param1: str, param2: Optional[str] = None) -> str:
+    """
+    Clear description of what the function does.
+    
+    Args:
+        param1: Description of first parameter
+        param2: Description of optional parameter
+        
+    Returns:
+        Description of return value
+        
+    Raises:
+        ExceptionType: When and why this exception occurs
+        
+    Example:
+        >>> function_name("example")
+        "expected output"
+    """
+```
+
+### Error Handling
+**Comprehensive error handling with logging:**
+
+```python
+try:
+    # Operation that might fail
+    result = perform_operation()
+    return result
+except ValueError as e:
+    logger.error(f"Invalid input: {str(e)}")
+    return f"Error: Invalid input - {str(e)}"
+except Exception as e:
+    logger.error(f"Unexpected error: {str(e)}")
+    logger.error(f"Traceback: {traceback.format_exc()}")
+    return f"Error: {str(e)}"
+```
+
+## 🔒 Environment and Configuration
+
+### Environment Variables
+**ALWAYS use environment variables for configuration:**
+
+```python
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Get configuration with defaults
+api_key = os.getenv("OPENAI_API_KEY")
+model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+temperature = float(os.getenv("OPENAI_TEMPERATURE", "0.1"))
+```
+
+### Configuration Requirements
+- **Environment Loading**: Always use `load_dotenv()`
+- **Default Values**: Provide sensible defaults for all config
+- **Type Conversion**: Convert string configs to appropriate types
+- **Validation**: Validate required environment variables
+
+## 🧪 Testing and Validation
+
+### Input Validation
+**ALWAYS validate inputs before processing:**
+
+```python
+def validate_input(data: str) -> bool:
+    """Validate input data"""
+    if not data or not data.strip():
+        return False
+    # Additional validation logic
+    return True
+
+def process_data(data: str) -> str:
+    """Process data with validation"""
+    if not validate_input(data):
+        return "Error: Invalid input data"
+    # Process valid data
+    return "Success: Data processed"
+```
+
+### State Validation
+**Validate state before accessing:**
+
+```python
+def agent_node(state) -> State:
+    """Agent with state validation"""
+    if not state.get("messages"):
+        logger.warning("No messages in state")
+        return state
+    
+    # Process valid state
+    return processed_state
+```
+
+## 🚀 Performance and Best Practices
+
+### Memory Management
+- **State Cleanup**: Clean up state when no longer needed
+- **Resource Management**: Use context managers for file operations
+- **Caching**: Cache expensive operations where appropriate
+
+### Async Considerations
+- **Non-blocking**: Ensure operations don't block the main thread
+- **Error Propagation**: Properly handle async errors
+- **Resource Cleanup**: Clean up resources in async contexts
+
+## 📚 Documentation Standards
+
+### Code Comments
+- **Complex Logic**: Comment complex business logic
+- **Non-obvious Decisions**: Explain why certain approaches were chosen
+- **API Usage**: Document external API usage patterns
+
+### README Updates
+- **New Features**: Update README when adding new features
+- **Architecture Changes**: Document architectural changes
+- **Usage Examples**: Provide clear usage examples
+
+## 🔍 Code Review Checklist
+
+Before submitting code, ensure:
+- [ ] Follows LangGraph official patterns
+- [ ] Uses centralized logging
+- [ ] Includes comprehensive error handling
+- [ ] Validates all inputs
+- [ ] Uses proper type hints
+- [ ] Includes docstrings
+- [ ] Follows naming conventions
+- [ ] Uses environment variables for config
+- [ ] Maintains state properly
+- [ ] Handles handoffs correctly
+
+## 🚨 Critical Reminders
+
+1. **NEVER assume - always check official documentation**
+2. **ALWAYS use the centralized logger**
+3. **ALWAYS validate inputs and state**
+4. **ALWAYS handle errors comprehensively**
+5. **ALWAYS follow LangGraph patterns exactly**
+6. **ALWAYS use environment variables for configuration**
+7. **ALWAYS maintain conversation context**
+8. **ALWAYS use proper type hints and docstrings**
+
+Remember: This is a production system handling real business operations. Code quality and reliability are paramount.

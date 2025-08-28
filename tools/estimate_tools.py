@@ -4,9 +4,7 @@ from langchain_core.tools import tool
 
 @tool
 def calculate_estimate(service: str, location: str) -> str:
-    """Calculate service estimate for the specified service and location."""
     try:
-        # Mock pricing logic
         base_prices = {
             "lawn care": 150,
             "house cleaning": 200,
@@ -23,9 +21,7 @@ def calculate_estimate(service: str, location: str) -> str:
 
 @tool
 def verify_address(address: str) -> str:
-    """Verify if address is in service area."""
     try:
-        # Mock address verification
         is_serviceable = True
         return f"Address {address} is {'serviceable' if is_serviceable else 'not serviceable'}"
     except Exception as e:
@@ -33,7 +29,6 @@ def verify_address(address: str) -> str:
 
 @tool
 def get_service_catalog() -> str:
-    """Get available services catalog."""
     try:
         services = [
             "Lawn Care - Regular lawn maintenance and care",

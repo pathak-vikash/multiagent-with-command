@@ -3,7 +3,6 @@ from typing import Dict, Any, Literal
 from langchain_core.tools import tool
 
 def validate_future_date(date_str: str, time_str: str) -> bool:
-    """Validate that the appointment date and time are in the future."""
     try:
         appointment_datetime = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
         return appointment_datetime > datetime.now()
@@ -12,15 +11,12 @@ def validate_future_date(date_str: str, time_str: str) -> bool:
 
 @tool
 def create_appointment(date: str, time: str, service: str, agenda: str = None, location: str = None, contact: str = None) -> str:
-    """Create a new appointment with the specified details including SOP information."""
     try:
         appointment_id = f"APT-{datetime.now().strftime('%Y%m%d%H%M%S')}"
         
-        # Validate that date is in the future
         if not validate_future_date(date, time):
             return "Error: Appointment date and time must be in the future."
         
-        # Build response with all collected information
         response_parts = [
             f"✅ Appointment created successfully!",
             f"📅 Date: {date}",
@@ -46,9 +42,7 @@ def create_appointment(date: str, time: str, service: str, agenda: str = None, l
 
 @tool
 def check_availability(date: str) -> str:
-    """Check available appointment slots for a specific date."""
     try:
-        # Mock availability data
         available_slots = ["9:00 AM", "2:00 PM", "4:00 PM"]
         return f"Available slots on {date}: {', '.join(available_slots)}"
     except Exception as e:
@@ -56,7 +50,6 @@ def check_availability(date: str) -> str:
 
 @tool
 def reschedule_appointment(appointment_id: str, new_date: str, new_time: str) -> str:
-    """Reschedule an existing appointment to a new date and time."""
     try:
         return f"Appointment {appointment_id} rescheduled to {new_date} at {new_time}"
     except Exception as e:
@@ -64,7 +57,6 @@ def reschedule_appointment(appointment_id: str, new_date: str, new_time: str) ->
 
 @tool
 def validate_appointment_sops(agenda: str = None, service: str = None, date: str = None, time: str = None, location: str = None, contact: str = None) -> str:
-    """Validate that all SOP requirements have been met for appointment scheduling."""
     missing_items = []
     
     if not agenda or agenda.strip() == "":

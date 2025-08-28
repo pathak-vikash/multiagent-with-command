@@ -6,7 +6,6 @@ from pathlib import Path
 import streamlit as st
 from langchain_core.messages import HumanMessage
 
-# Add the project root to the Python path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
@@ -15,20 +14,14 @@ from core.logger import logger
 from utils.llm_helpers import initialize_langsmith
 
 def process_message(message: str, conversation_history: list = None):
-    """Process a single message through the supervisor system"""
     if conversation_history is None:
         conversation_history = []
     
     try:
-        logger.info(f"📨 Processing: {message[:50]}...")
-        
-        # Get the supervisor graph from centralized module
         supervisor_graph = get()
         
-        # Build the initial state from conversation history
         initial_messages = []
         
-        # Add conversation history to messages
         for msg in conversation_history:
             if isinstance(msg, dict) and "role" in msg and "content" in msg:
                 initial_messages.append({
@@ -36,52 +29,37 @@ def process_message(message: str, conversation_history: list = None):
                     "content": msg["content"]
                 })
         
-        # Add the current message
         initial_messages.append({"role": "user", "content": message})
         
-        # Create the initial state using MessagesState format
         initial_state = {
             "messages": initial_messages
         }
         
-        logger.info(f"🔄 Starting graph execution ({len(initial_messages)} messages)")
-        
-        # Stream the conversation and collect all results
         results = []
         response_received = False
         
         for chunk in supervisor_graph.stream(initial_state):
             results.append(chunk)
             
-            # Check if we have a final response
             if "messages" in chunk and len(chunk["messages"]) > 0:
                 last_message = chunk["messages"][-1]
                 if hasattr(last_message, 'type') and last_message.type == "ai":
                     response_received = True
-                    logger.info(f"✅ Response received: {last_message.content[:50]}...")
             
-            # Also check for any assistant messages in the entire chunk
             if "messages" in chunk:
                 for msg in chunk["messages"]:
                     if hasattr(msg, 'type') and msg.type == "ai" and hasattr(msg, 'content') and msg.content:
                         response_received = True
-                        logger.info(f"✅ Response found in chunk: {msg.content[:50]}...")
                         break
             
-            # Check for nested messages in agent chunks (e.g., general_agent, appointment_agent, etc.)
             for key, value in chunk.items():
                 if isinstance(value, dict) and "messages" in value:
                     for msg in value["messages"]:
                         if hasattr(msg, 'type') and msg.type == "ai" and hasattr(msg, 'content') and msg.content:
                             response_received = True
-                            logger.info(f"✅ Response found in {key}: {msg.content[:50]}...")
                             break
         
-        logger.info(f"🎯 Graph completed - Response: {response_received}, Chunks: {len(results)}")
-        
-        # If no response was received, add a fallback
         if not response_received:
-            logger.warning("⚠️ No response received, adding fallback")
             results.append({
                 "messages": [{"role": "assistant", "content": "I apologize, but I couldn't process your request. Please try again."}],
                 "error": "No response generated"
@@ -89,8 +67,7 @@ def process_message(message: str, conversation_history: list = None):
         
         return results
     except Exception as e:
-        logger.error(f"❌ Error processing message: {e}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error(f"Error processing message: {e}")
         return [{"error": str(e)}]
 
 def main():
@@ -103,16 +80,13 @@ def main():
     st.title("🤖 LangGraph Multi-Agent Supervisor System")
     st.markdown("---")
     
-    # Check for API key
     if not os.getenv("OPENAI_API_KEY"):
         st.error("❌ OPENAI_API_KEY environment variable is required")
         st.info("Please set your OpenAI API key in the .env file")
         return
     
-    # Initialize LangSmith tracing
     initialize_langsmith()
     
-    # Sidebar with predefined questions
     st.sidebar.header("💡 Predefined Questions")
     st.sidebar.markdown("Click any question to use it:")
     
@@ -144,56 +118,45 @@ def main():
         ]
     }
     
-    # Display predefined questions by category
     for category, questions in predefined_questions.items():
         st.sidebar.subheader(category)
         for question in questions:
             if st.sidebar.button(question, key=f"btn_{category}_{question[:20]}"):
                 st.session_state.user_input = question
     
-    # Main chat interface
     st.header("💬 Chat Interface")
     
-    # Initialize session state
     if "messages" not in st.session_state:
         st.session_state.messages = []
     
     if "conversation_history" not in st.session_state:
         st.session_state.conversation_history = []
     
-    # Display chat messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.write(message["content"])
             
-            # Display additional information if available
             if "metadata" in message and message["metadata"]:
                 with st.expander("🔍 Additional Details"):
                     st.json(message["metadata"])
     
-    # User input
     user_input = st.chat_input("Type your message here...")
     
-    # Check if a predefined question was selected
     if "user_input" in st.session_state:
         user_input = st.session_state.user_input
         del st.session_state.user_input
     
     if user_input:
-        # Add user message to chat
         st.session_state.messages.append({"role": "user", "content": user_input})
         
-        # Display user message
         with st.chat_message("user"):
             st.write(user_input)
         
-        # Process the message
         with st.chat_message("assistant"):
             with st.spinner("🤖 Processing your request..."):
                 try:
                     results = process_message(user_input, st.session_state.conversation_history)
                     
-                    # Find the final response
                     final_response = None
                     metadata = {}
                     
@@ -203,7 +166,6 @@ def main():
                             if hasattr(last_message, 'type') and last_message.type == "ai":
                                 final_response = last_message.content
                         
-                        # Check for nested messages in agent chunks
                         for key, value in result.items():
                             if isinstance(value, dict) and "messages" in value:
                                 for msg in value["messages"]:
@@ -216,13 +178,11 @@ def main():
                     else:
                         st.error("❌ No response generated")
                     
-                    # Add assistant response to chat
                     st.session_state.messages.append({
                         "role": "assistant", 
                         "content": final_response or "Sorry, I couldn't process your request."
                     })
                     
-                    # Update conversation history with both user and assistant messages
                     st.session_state.conversation_history.append({
                         "role": "user",
                         "content": user_input,
@@ -243,17 +203,14 @@ def main():
                         "content": "Sorry, I encountered an error processing your request. Please try again."
                     })
     
-    # Clear chat button
     if st.sidebar.button("🗑️ Clear Chat"):
         st.session_state.messages = []
         st.session_state.conversation_history = []
         st.rerun()
     
-    # System information
     st.sidebar.markdown("---")
     st.sidebar.header("ℹ️ System Info")
     
-    # Get graph information
     try:
         graph_info = get_info()
         st.sidebar.markdown(f"**Graph Nodes:** {len(graph_info['nodes'])}")
@@ -272,7 +229,6 @@ def main():
     except Exception as e:
         st.sidebar.error(f"Error loading graph info: {e}")
     
-    # Display conversation history length
     if st.session_state.conversation_history:
         st.sidebar.metric(
             "Conversation Length", 

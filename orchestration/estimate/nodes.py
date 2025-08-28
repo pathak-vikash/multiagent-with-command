@@ -1,54 +1,29 @@
-"""
-Estimate agent sub-graph nodes.
-
-This module contains the agent node for estimate and pricing handling.
-"""
-
 import traceback
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import MessagesState
 from langgraph.prebuilt import create_react_agent
 from tools.estimate_tools import calculate_estimate, verify_address, get_service_catalog
 from utils.llm_helpers import create_llm_client
+from utils.conversation_formatter import format_recent_conversation
 from core.logger import logger
 from .state import State
 
 def estimate_agent(state) -> State:
-    """Estimate agent that handles price quotes and estimates"""
-    
     try:
-        # Get all messages to understand the full conversation context
         if not state["messages"]:
-            logger.warning("No messages in state")
             return state
             
-        # Get the task description from the supervisor (last message)
         last_message = state["messages"][-1]
         task_description = last_message.content if hasattr(last_message, 'content') else str(last_message)
         
-        # Get the full conversation context
-        conversation_context = ""
-        if len(state["messages"]) > 1:
-            # Include previous messages for context (skip the supervisor's task description)
-            context_messages = state["messages"][:-1]
-            conversation_context = "\n".join([
-                f"{msg.type if hasattr(msg, 'type') else 'unknown'}: {msg.content if hasattr(msg, 'content') else str(msg)}"
-                for msg in context_messages[-5:]  # Last 5 messages for context
-            ])
+        conversation_context = format_recent_conversation(state["messages"], exclude_last=1)
         
-        logger.info(f"💰 Estimate agent processing: {task_description[:50]}...")
-        
-        # Set workflow step if state supports it
         if hasattr(state, 'set_workflow_step'):
             state.set_workflow_step("estimate_calculation")
         
-        # Create LLM client
         llm = create_llm_client()
-        
-        # Get the tools
         tools = [calculate_estimate, verify_address, get_service_catalog]
         
-        # Create the agent using LangGraph pattern
         agent = create_react_agent(
             model=llm,
             tools=tools,
@@ -76,13 +51,9 @@ def estimate_agent(state) -> State:
             name="estimate_agent"
         )
         
-        # Generate response
         response = agent.invoke(state)
-        
-        logger.info("✅ Estimate agent completed")
         return response
         
     except Exception as e:
-        logger.error(f"❌ Error in estimate agent: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error(f"Error in estimate agent: {str(e)}")
         raise

@@ -1,7 +1,3 @@
-"""
-Centralized logging configuration using loguru.
-"""
-
 import os
 import sys
 from pathlib import Path
@@ -10,14 +6,11 @@ import logging
 from functools import wraps
 import time
 
-# Create logs directory if it doesn't exist
 logs_dir = Path("logs")
 logs_dir.mkdir(exist_ok=True)
 
-# Remove default logger
 logger.remove()
 
-# Add console logger with color (only essential info)
 logger.add(
     sys.stdout,
     format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan> - <level>{message}</level>",
@@ -26,7 +19,6 @@ logger.add(
     filter=lambda record: record["level"].name in ["INFO", "WARNING", "ERROR"] and not record["message"].startswith("Processing")
 )
 
-# Add file logger for application logs (INFO and above)
 logger.add(
     "logs/application.log",
     format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
@@ -40,7 +32,6 @@ logger.add(
     filter=lambda record: record["name"].startswith(("agents.", "core.", "utils.", "graph", "streamlit_app", "main"))
 )
 
-# Add error file logger for errors only
 logger.add(
     "logs/errors.log",
     format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
@@ -54,18 +45,14 @@ logger.add(
     filter=lambda record: record["name"].startswith(("agents.", "core.", "utils.", "graph", "streamlit_app", "main"))
 )
 
-# Intercept standard logging and redirect to loguru (but only for our application)
 class InterceptHandler(logging.Handler):
     def emit(self, record):
-        # Skip system logging events and only process our application logs
         if record.name.startswith(("agents.", "core.", "utils.", "graph", "streamlit_app", "main")):
-            # Get corresponding Loguru level if it exists
             try:
                 level = logger.level(record.levelname).name
             except ValueError:
                 level = record.levelno
 
-            # Find caller from where originated the logged message
             frame, depth = logging.currentframe(), 2
             while frame.f_code.co_filename == logging.__file__:
                 frame = frame.f_back
@@ -73,7 +60,6 @@ class InterceptHandler(logging.Handler):
 
             logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
-# Setup standard logging to use loguru (but only for our application modules)
 logging.basicConfig(handlers=[InterceptHandler()], level=logging.INFO, force=True)
 
 logger.info("Logging system initialized")

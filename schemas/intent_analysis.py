@@ -20,7 +20,6 @@ class AgentType(str, Enum):
     ADVISOR_AGENT = "advisor_agent"
 
 class IntentAnalysis(BaseModel):
-    """Schema for LLM intent analysis response"""
     agent: AgentType = Field(description="Which agent should handle this request")
     confidence: float = Field(ge=0.0, le=1.0, description="Confidence score for the routing decision")
     task_description: str = Field(description="Detailed description of what the agent should do")

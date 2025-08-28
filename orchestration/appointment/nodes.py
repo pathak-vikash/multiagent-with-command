@@ -1,11 +1,3 @@
-"""
-Appointment sub-graph nodes.
-
-This module contains all the agent nodes for the appointment booking workflow:
-1. SOP Collector Agent - Collects and validates all 5 SOPs
-2. Appointment Booking Agent - Handles the actual booking after SOPs are complete
-"""
-
 import traceback
 import re
 from langchain_core.prompts import ChatPromptTemplate
@@ -13,45 +5,28 @@ from langgraph.graph import MessagesState
 from langgraph.prebuilt import create_react_agent
 from tools.appointment_tools import create_appointment, check_availability, reschedule_appointment
 from utils.llm_helpers import create_llm_client
+from utils.conversation_formatter import format_recent_conversation
 from core.logger import logger
 from .state import AppointmentState
 
 def sop_collector(state) -> AppointmentState:
-    """SOP Collector agent that ensures all 5 SOPs are completed before appointment booking"""
-    
     try:
-        # Get all messages to understand the full conversation context
         if not state["messages"]:
-            logger.warning("No messages in state")
             return state
             
-        # Get the task description from the supervisor (last message)
         last_message = state["messages"][-1]
         task_description = last_message.content if hasattr(last_message, 'content') else str(last_message)
         
-        # Get the full conversation context
-        conversation_context = ""
-        if len(state["messages"]) > 1:
-            # Include previous messages for context (skip the supervisor's task description)
-            context_messages = state["messages"][:-1]
-            conversation_context = "\n".join([
-                f"{msg.type if hasattr(msg, 'type') else 'unknown'}: {msg.content if hasattr(msg, 'content') else str(msg)}"
-                for msg in context_messages[-5:]  # Last 5 messages for context
-            ])
+        conversation_context = format_recent_conversation(state["messages"], exclude_last=1)
         
-        logger.info(f"📋 SOP Collector agent processing: {task_description[:50]}...")
-        
-        # Set workflow step if state supports it
         if hasattr(state, 'set_workflow_step'):
             state.set_workflow_step("sop_collection")
         
-        # Create LLM client
         llm = create_llm_client()
         
-        # Create the agent using LangGraph pattern
         agent = create_react_agent(
             model=llm,
-            tools=[],  # No tools needed for SOP collection
+            tools=[],
             prompt=(
                 "You are a SOP (Standard Operating Procedure) Collector agent. Your role is to ensure ALL 5 SOPs are completed before any appointment can be booked.\n\n"
                 "CRITICAL: You must collect and validate these 5 SOPs in order:\n\n"
@@ -98,19 +73,14 @@ def sop_collector(state) -> AppointmentState:
             name="sop_collector_agent"
         )
         
-        # Generate response
         response = agent.invoke(state)
-        
-        logger.info("✅ SOP Collector agent completed")
         return response
         
     except Exception as e:
-        logger.error(f"❌ Error in SOP Collector agent: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error(f"Error in SOP Collector agent: {str(e)}")
         raise
 
 def extract_sop_info_from_context(messages):
-    """Extract SOP information from conversation context"""
     sop_info = {
         'agenda': None,
         'service': None,
@@ -120,13 +90,10 @@ def extract_sop_info_from_context(messages):
         'contact': None
     }
     
-    # Look for SOP summary in recent messages
-    for msg in reversed(messages[-3:]):  # Check last 3 messages
+    for msg in reversed(messages[-3:]):
         content = msg.content if hasattr(msg, 'content') else str(msg)
         
-        # Look for SOP summary pattern
         if "✅ All SOPs collected successfully!" in content:
-            # Extract information using regex patterns
             agenda_match = re.search(r'📋 Agenda: (.+)', content)
             if agenda_match:
                 sop_info['agenda'] = agenda_match.group(1).strip()
@@ -156,50 +123,28 @@ def extract_sop_info_from_context(messages):
     return sop_info
 
 def booking_agent(state) -> AppointmentState:
-    """Appointment Booking agent that handles the actual booking after SOPs are collected"""
-    
     try:
-        # Get all messages to understand the full conversation context
         if not state["messages"]:
-            logger.warning("No messages in state")
             return state
             
-        # Get the task description from the supervisor (last message)
         last_message = state["messages"][-1]
         task_description = last_message.content if hasattr(last_message, 'content') else str(last_message)
         
-        # Get the full conversation context
-        conversation_context = ""
-        if len(state["messages"]) > 1:
-            # Include previous messages for context (skip the supervisor's task description)
-            context_messages = state["messages"][:-1]
-            conversation_context = "\n".join([
-                f"{msg.type if hasattr(msg, 'type') else 'unknown'}: {msg.content if hasattr(msg, 'content') else str(msg)}"
-                for msg in context_messages[-5:]  # Last 5 messages for context
-            ])
+        conversation_context = format_recent_conversation(state["messages"], exclude_last=1)
         
-        logger.info(f"📅 Appointment Booking agent processing: {task_description[:50]}...")
-        
-        # Set workflow step if state supports it
         if hasattr(state, 'set_workflow_step'):
             state.set_workflow_step("appointment_booking")
         
-        # Extract SOP information from conversation context
         sop_info = extract_sop_info_from_context(state["messages"])
         
-        # Store SOP data in state if state supports it
         if hasattr(state, 'set_sop_data'):
             for key, value in sop_info.items():
                 if value:
                     state.set_sop_data(key, value)
         
-        # Create LLM client
         llm = create_llm_client()
-        
-        # Get the tools
         tools = [create_appointment, check_availability, reschedule_appointment]
         
-        # Create the agent using LangGraph pattern
         agent = create_react_agent(
             model=llm,
             tools=tools,
@@ -232,13 +177,9 @@ def booking_agent(state) -> AppointmentState:
             name="appointment_booking_agent"
         )
         
-        # Generate response
         response = agent.invoke(state)
-        
-        logger.info("✅ Appointment Booking agent completed")
         return response
         
     except Exception as e:
-        logger.error(f"❌ Error in Appointment Booking agent: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error(f"Error in Appointment Booking agent: {str(e)}")
         raise

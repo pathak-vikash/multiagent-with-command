@@ -4,7 +4,6 @@ from langchain_core.tools import tool
 
 @tool
 def get_service_info(service: str) -> str:
-    """Get detailed information about a specific service."""
     try:
         service_info = {
             "lawn care": "Professional lawn maintenance including mowing, edging, and fertilization. Duration: 1-2 hours, Frequency: Weekly or bi-weekly, Price Range: $100-200 per visit",
@@ -20,7 +19,6 @@ def get_service_info(service: str) -> str:
 
 @tool
 def get_business_hours() -> str:
-    """Get business hours information."""
     try:
         business_hours = "Monday-Friday: 8:00 AM - 6:00 PM, Saturday: 9:00 AM - 4:00 PM, Sunday: Closed"
         return f"Business hours: {business_hours}"
@@ -29,7 +27,6 @@ def get_business_hours() -> str:
 
 @tool
 def get_contact_info() -> str:
-    """Get contact information."""
     try:
         contact_info = "Phone: (555) 123-4567, Email: info@example.com, Address: 123 Business St, City, State 12345"
         return f"Contact us at: {contact_info}"

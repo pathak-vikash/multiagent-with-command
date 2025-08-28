@@ -5,26 +5,20 @@ import argparse
 from datetime import datetime
 from dotenv import load_dotenv
 
-# Import our centralized graph module
 from orchestration.graph import get, get_info
 from utils.llm_helpers import initialize_langsmith
 
 def run_demo_mode():
-    """Run the system in demo mode with predefined examples"""
-    
     print("🚀 Initializing LangGraph Supervisor System...")
     
-    # Initialize LangSmith tracing
     initialize_langsmith()
     
     supervisor_graph = get()
     print("✅ Supervisor graph created successfully!")
     
-    # Display graph information
     graph_info = get_info()
     print(f"📊 Graph Info: {len(graph_info['nodes'])} nodes, {graph_info['routing_method']}")
     
-    # Example conversations
     example_conversations = [
         "Hi there! How are you doing today?",
         "I need to book an appointment for lawn care next Tuesday afternoon",
@@ -46,7 +40,6 @@ def run_demo_mode():
     print("• Advisor Agent: Business information and recommendations")
     print(f"{'='*80}\n")
     
-    # Process each example
     for i, message in enumerate(example_conversations, 1):
         print(f"\n{'='*80}")
         print(f"💬 Example {i}: User Input")
@@ -54,7 +47,6 @@ def run_demo_mode():
         print(f"👤 User: {message}")
         print(f"{'='*80}")
         
-        # Stream the conversation
         try:
             response_received = False
             for chunk in supervisor_graph.stream({
@@ -64,25 +56,21 @@ def run_demo_mode():
                 "user_info": {},
                 "session_data": {}
             }):
-                # Print the response
                 if "messages" in chunk and len(chunk["messages"]) > 0:
                     last_message = chunk["messages"][-1]
                     if last_message["role"] == "assistant":
                         print(f"🤖 Assistant: {last_message['content']}")
                         response_received = True
                         
-                        # Print structured data if available
                         current_agent = chunk.get("current_agent")
                         if current_agent:
                             print(f"🏷️ Handled by: {current_agent}")
                         
-                        # Print additional context
                         if "supervisor_decision" in chunk:
                             decision = chunk["supervisor_decision"]
                             print(f"🎯 Intent: {decision.intent_type} (confidence: {decision.confidence:.2f})")
                             print(f"💭 Reasoning: {decision.reasoning}")
                         
-                        # Print agent-specific results
                         if "appointment_result" in chunk and chunk["appointment_result"]:
                             result = chunk["appointment_result"]
                             print(f"📅 Appointment ID: {result.appointment_id}")
@@ -113,17 +101,13 @@ def run_demo_mode():
     print(f"{'='*80}")
 
 def run_interactive_mode():
-    """Run the system in interactive console mode"""
-    
     print("🚀 Initializing LangGraph Supervisor System...")
     
-    # Initialize LangSmith tracing
     initialize_langsmith()
     
     supervisor_graph = get()
     print("✅ Supervisor graph created successfully!")
     
-    # Display graph information
     graph_info = get_info()
     print(f"📊 Graph Info: {len(graph_info['nodes'])} nodes, {graph_info['routing_method']}")
     
@@ -145,10 +129,8 @@ def run_interactive_mode():
     print("💡 Type 'help' for example questions.")
     print(f"{'='*80}\n")
     
-    # Initialize conversation history
     conversation_history = []
     
-    # Example questions for help
     help_examples = [
         "Hi there! How are you doing today?",
         "I need to book an appointment for lawn care next Tuesday afternoon",
@@ -159,15 +141,12 @@ def run_interactive_mode():
     
     while True:
         try:
-            # Get user input
             user_input = input("\n👤 You: ").strip()
             
-            # Check for exit commands
             if user_input.lower() in ['quit', 'exit', 'bye', 'q']:
                 print("\n👋 Goodbye! Thanks for using the LangGraph Multi-Agent Supervisor System.")
                 break
             
-            # Check for help command
             if user_input.lower() == 'help':
                 print("\n💡 Example questions you can ask:")
                 for i, example in enumerate(help_examples, 1):
@@ -175,13 +154,11 @@ def run_interactive_mode():
                 print("\n💡 Or just type your own question!")
                 continue
             
-            # Skip empty input
             if not user_input:
                 continue
             
             print("\n🤖 Assistant: ", end="", flush=True)
             
-            # Process the message
             try:
                 response_received = False
                 for chunk in supervisor_graph.stream({
@@ -191,14 +168,12 @@ def run_interactive_mode():
                     "user_info": {},
                     "session_data": {}
                 }):
-                    # Print the response
                     if "messages" in chunk and len(chunk["messages"]) > 0:
                         last_message = chunk["messages"][-1]
                         if last_message["role"] == "assistant":
                             print(last_message['content'])
                             response_received = True
                             
-                            # Print additional info in a compact format
                             current_agent = chunk.get("current_agent")
                             if current_agent:
                                 print(f"   [Handled by: {current_agent}]")
@@ -210,7 +185,6 @@ def run_interactive_mode():
                 if not response_received:
                     print("❌ No response generated")
                 
-                # Update conversation history
                 conversation_history.append({
                     "role": "user",
                     "content": user_input,
@@ -229,18 +203,13 @@ def run_interactive_mode():
             break
 
 def main():
-    """Main application with command line argument support"""
-    
-    # Load environment variables
     load_dotenv()
     
-    # Check for required environment variables
     if not os.getenv("OPENAI_API_KEY"):
         print("❌ Error: OPENAI_API_KEY environment variable is required")
         print("Please set your OpenAI API key in the .env file")
         return
     
-    # Parse command line arguments
     parser = argparse.ArgumentParser(
         description="LangGraph Multi-Agent Supervisor System",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -267,11 +236,9 @@ Examples:
     
     args = parser.parse_args()
     
-    # Determine mode
     if args.demo:
         run_demo_mode()
     else:
-        # Default to interactive mode
         run_interactive_mode()
 
 if __name__ == "__main__":

@@ -1,8 +1,3 @@
-"""
-Agent handoff utilities following the official LangGraph supervisor pattern.
-Based on the supervisor-tools.py example from LangGraph documentation.
-"""
-
 from typing import Annotated
 from langchain_core.tools import tool, InjectedToolCallId
 from langgraph.prebuilt import InjectedState
@@ -11,7 +6,6 @@ from langgraph.graph import MessagesState
 from core.logger import logger
 
 def create_handoff_tool(*, agent_name: str, description: str | None = None):
-    """Create a basic handoff tool for transferring to an agent"""
     name = f"transfer_to_{agent_name}"
     description = description or f"Ask {agent_name} for help."
 
@@ -35,18 +29,15 @@ def create_handoff_tool(*, agent_name: str, description: str | None = None):
     return handoff_tool
 
 def create_task_description_handoff_tool(*, agent_name: str, description: str | None = None):
-    """Create a handoff tool that includes task description (following official pattern)"""
     name = f"transfer_to_{agent_name}"
     description = description or f"Ask {agent_name} for help."
 
     @tool(name, description=description)
     def handoff_tool(
-        # this is populated by the supervisor LLM
         task_description: Annotated[
             str,
             "Description of what the next agent should do, including all of the relevant context.",
         ],
-        # these parameters are ignored by the LLM
         state: Annotated[MessagesState, InjectedState],
     ) -> Command:
         task_description_message = {"role": "user", "content": task_description}
@@ -59,7 +50,6 @@ def create_task_description_handoff_tool(*, agent_name: str, description: str | 
     return handoff_tool
 
 def get_handoff_tools():
-    """Get all handoff tools for the supervisor"""
     return [
         create_task_description_handoff_tool(
             agent_name="general",
@@ -84,7 +74,6 @@ def get_handoff_tools():
     ]
 
 def get_agent_descriptions():
-    """Get descriptions of all available agents"""
     return {
         "general": "Handles casual conversation, greetings, and general inquiries",
         "appointment": "Handles appointment booking, scheduling, and calendar management", 
