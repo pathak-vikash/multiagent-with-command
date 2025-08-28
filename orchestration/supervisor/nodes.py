@@ -39,9 +39,13 @@ def supervisor(state) -> State:
         
         logger.info(f"🎯 Supervisor processing: {task_description[:50]}...")
         
-        # Set workflow step if state supports it
+        # Update state using LangGraph's recommended patterns
         if hasattr(state, 'set_workflow_step'):
             state.set_workflow_step("supervisor_routing")
+        
+        # Add routing decision to history
+        if hasattr(state, 'add_routing_decision'):
+            state.add_routing_decision("supervisor")
         
         # Create LLM client
         llm = create_llm_client()
