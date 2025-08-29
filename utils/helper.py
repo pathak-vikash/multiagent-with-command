@@ -278,9 +278,10 @@ def format_message(text: str) -> str:
 def format_conversation_history(messages: List[Union[SystemMessage, HumanMessage, AIMessage, ToolMessage]]) -> str:
     formatted_messages = []
     for message in messages:
-        # also include tool messages
+        # Skip tool messages to avoid OpenAI API errors
+        # Tool messages require proper tool_calls context which may not be available
         if isinstance(message, ToolMessage):
-            formatted_messages.append(f"Tool: {message.content}")
+            continue
         elif isinstance(message, SystemMessage):
             formatted_messages.append(f"System: {message.content}")
         elif isinstance(message, HumanMessage):

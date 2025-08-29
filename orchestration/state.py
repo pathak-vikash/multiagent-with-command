@@ -15,7 +15,7 @@ class State(TypedDict):
 
 def create() -> State:
     return State(
-        current=Node.APPOINTMENT.value,
+        current=Node.GENERAL.value,
         messages=[],
         metadata={},
         routing_history=[],

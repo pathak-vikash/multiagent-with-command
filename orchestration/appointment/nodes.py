@@ -10,6 +10,7 @@ from tools.appointment_tools import create_appointment, check_availability, resc
 from utils import load_template, to_plain_dict, to_plain_text
 from utils.llm_helpers import create_llm_client
 from utils.helper import format_conversation_history
+from utils.agent_handoff import get_agent_router_tools
 from core.logger import logger
 from .state import AppointmentState
 from .response_format import SOPExecutionResult
@@ -135,8 +136,13 @@ def booking_agent(state) -> AppointmentState:
         
         # Create LLM with tools - following reference pattern exactly
         llm = create_llm_client()
-        tools = [create_appointment, check_availability, reschedule_appointment]
-        llm_with_tools = llm.bind_tools(tools)
+        
+        # Include both appointment tools and router tools
+        appointment_tools = [create_appointment, check_availability, reschedule_appointment]
+        router_tools = get_agent_router_tools()
+        all_tools = appointment_tools + router_tools
+        
+        llm_with_tools = llm.bind_tools(all_tools)
 
         response = llm_with_tools.invoke(formatted_messages)
         

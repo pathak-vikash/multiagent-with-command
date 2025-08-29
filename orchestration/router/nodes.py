@@ -8,8 +8,9 @@ from utils.agent_handoff import get_handoff_tools
 from utils.helper import format_conversation_history
 from core.logger import logger
 from orchestration.state import State
+from orchestration.schema import Node
 
-def supervisor(state) -> State:
+def router(state) -> State:
     try:
         if not state["messages"]:
             return state
@@ -19,11 +20,11 @@ def supervisor(state) -> State:
         
         conversation_context = format_conversation_history(state["messages"])
         
-        if hasattr(state, 'set_workflow_step'):
-            state.set_workflow_step("supervisor_routing")
+        if hasattr(state, 'current'):
+            state.current = Node.ROUTER.value
         
         if hasattr(state, 'add_routing_decision'):
-            state.add_routing_decision("supervisor")
+            state.add_routing_decision("router")
         
         llm = create_llm_client()
         tools = get_handoff_tools()
@@ -32,19 +33,28 @@ def supervisor(state) -> State:
             model=llm,
             tools=tools,
             prompt=(
-                "You are a supervisor managing specialized agents. Your ONLY job is to route requests to the appropriate agent.\n\n"
+                "You are a router managing specialized agents. Your ONLY job is to route requests to the appropriate agent.\n\n"
                 "Available agents:\n"
-                "- general: For casual conversation, greetings, and general inquiries\n"
-                "- appointment: For booking appointments, scheduling, and calendar management\n"
-                "- support: For customer support, warranty claims, and technical issues\n"
-                "- estimate: For price quotes, cost estimates, and pricing information\n"
-                "- advisor: For business information, service details, and recommendations\n\n"
+                "- general: For casual conversation, greetings, general inquiries, and initial customer interactions\n"
+                "- appointment: For booking appointments, scheduling, calendar management, availability checking, and rescheduling\n"
+                "- support: For customer support, warranty claims, technical issues, problem resolution, and ticket creation\n"
+                "- estimate: For price quotes, cost estimates, pricing information, service catalogs, and address verification\n"
+                "- advisor: For business information, service details, recommendations, business hours, and contact information\n\n"
                 "CRITICAL RULES:\n"
                 "1. You MUST ALWAYS transfer to an agent - NEVER respond directly to the user\n"
                 "2. You are NOT allowed to answer questions or provide information yourself\n"
                 "3. Your ONLY action should be to use a handoff tool to transfer to the appropriate agent\n"
                 "4. Provide a clear task description when transferring to an agent\n"
-                "5. Transfer to one agent at a time, do not call agents in parallel\n\n"
+                "5. Transfer to one agent at a time, do not call agents in parallel\n"
+                "6. If a request comes from another agent (routing request), analyze the reason and route appropriately\n\n"
+                "ROUTING GUIDELINES:\n"
+                "- If the request mentions 'ROUTING REQUEST:', look at the conversation history to find the original user request\n"
+                "- Route based on the original user request, not the routing reason\n"
+                "- Look for the user's actual intent in the conversation history\n"
+                "- Consider the full context when making routing decisions\n"
+                "- If unclear, route to the general agent for initial assessment\n\n"
+                "IMPORTANT: When you see 'ROUTING REQUEST:', the original user request will be shown after 'User's original request:'\n"
+                "Use that original request to determine which agent to route to.\n\n"
                 "Previous conversation context:\n"
                 f"{conversation_context}\n\n"
                 "Current user request: {task_description}\n\n"
@@ -52,10 +62,11 @@ def supervisor(state) -> State:
                 "- Analyze the user's intent and choose the most appropriate agent\n"
                 "- Use the handoff tools to transfer to the selected agent\n"
                 "- Provide clear task descriptions for the receiving agent\n"
-                "- Be efficient and accurate in routing decisions\n\n"
+                "- Be efficient and accurate in routing decisions\n"
+                "- If you see 'ROUTING REQUEST:', find the original user request in the conversation history\n\n"
                 "REMEMBER: You are ONLY a router. Transfer the request to an agent immediately."
             ),
-            name="supervisor"
+            name="router"
         )
         
         response = agent.invoke(state)
@@ -65,5 +76,5 @@ def supervisor(state) -> State:
         raise
         
     except Exception as e:
-        logger.error(f"Error in supervisor: {str(e)}")
+        logger.error(f"Error in router: {str(e)}")
         raise
