@@ -4,7 +4,7 @@ from langgraph.graph import MessagesState
 from langgraph.prebuilt import create_react_agent
 from tools.estimate_tools import calculate_estimate, verify_address, get_service_catalog
 from utils.llm_helpers import create_llm_client
-from utils.conversation_formatter import format_recent_conversation
+from utils.helper import format_conversation_history
 from core.logger import logger
 from .state import State
 
@@ -16,7 +16,7 @@ def estimate_agent(state) -> State:
         last_message = state["messages"][-1]
         task_description = last_message.content if hasattr(last_message, 'content') else str(last_message)
         
-        conversation_context = format_recent_conversation(state["messages"], exclude_last=1)
+        conversation_context = format_conversation_history(state["messages"])
         
         if hasattr(state, 'set_workflow_step'):
             state.set_workflow_step("estimate_calculation")

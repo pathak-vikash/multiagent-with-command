@@ -19,142 +19,124 @@ from orchestration.state import create as create_state
 from utils.llm_helpers import initialize_langsmith
 from langchain_core.messages import HumanMessage
 
-def process_message(message: str, current_state=None):
+def process_message(current_state=None):
     """Process a single message through the graph"""
     try:
         # Initialize or use existing state
         if current_state is None:
             current_state = create_state()
         
+        logger.info(f"Current state: {current_state}")
+
+
         # Ensure the state has the proper structure
         if "messages" not in current_state:
             current_state["messages"] = []
         
-        # Add the new user message to the existing conversation
-        current_state["messages"].append(HumanMessage(content=message))
+        logger.info(f"Starting graph execution with {len(current_state['messages'])} messages")
         
         # Get graph and process
         graph = get_graph()
-        response = "No response generated"
-        final_state = current_state
-        current_agent = "Unknown"
-        response_chunk = None
+        the_response = ""
+        the_agent = "Unknown"
         
         for chunk in graph.stream(current_state):
-            # Store the last chunk for debugging
-            st.session_state.last_chunk = chunk
+            
+            # Always update final_state to the latest chunk
+            final_state = chunk
+            
+            logger.info(f"Processing chunk with keys: {list(chunk.keys())}")
+            if "messages" in chunk:
+                logger.info(f"Chunk has {len(chunk['messages'])} messages")
             
             # Check for any agent response in the chunk
-            for key, value in chunk.items():
-                try:
-                    if isinstance(value, dict):
-                        # Check if this agent has messages
-                        if "messages" in value and len(value["messages"]) > 0:
-                            # Get the last AI message from this agent
-                            last_message = value["messages"][-1]
-                            if hasattr(last_message, 'type') and last_message.type == "ai":
-                                response = last_message.content
-                                current_agent = key  # The key is the agent name
-                                final_state = chunk
-                                response_chunk = chunk
-                                break
-                        
-                        # Also check if the value itself is a message
-                        elif hasattr(value, 'type') and value.type == "ai":
-                            response = value.content
-                            current_agent = key
-                            final_state = chunk
-                            response_chunk = chunk
-                            break
-                    
-                    # Check if the value itself is an AI message
-                    elif hasattr(value, 'type') and value.type == "ai":
-                        response = value.content
-                        current_agent = key
-                        final_state = chunk
-                        response_chunk = chunk
-                        break
-                        
-                except Exception as e:
-                    # Log the error but continue processing other keys
-                    continue
-            
-            # If we found a response, break out of the outer loop
-            if response != "No response generated":
-                break
-            
-            # Update final state
-            final_state = chunk
-        
-        # Store the response chunk for debugging
-        if response_chunk:
-            st.session_state.last_chunk = response_chunk
-        
-        # Ensure the final state preserves all messages
-        if final_state and "messages" in final_state:
-            pass  # State is good
-        else:
-            final_state = current_state
-        
-        return response, final_state, current_agent
+            for agent_name, state in chunk.items():
+
+                logger.info(f"Agent name: {agent_name}")
+                logger.info(f"State: {state}")
+                
+                if state and isinstance(state, dict):
+                    messages = state.get("messages", [])
+                    if len(messages) > 0:
+                        last_message = messages[-1]
+                        the_response = last_message
+                        the_agent = agent_name
+
+        return the_response, the_agent
         
     except Exception as e:
         st.error(f"Error: {str(e)}")
-        return "Error processing message", current_state, "Error"
+        return "Error processing message", "Error"
 
 def main():
     st.title("🤖 Multi-Agent Orchestration System")
     st.markdown("---")
     
     # Initialize session state
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    
     if "graph_state" not in st.session_state:
-        st.session_state.graph_state = None
+        st.session_state.graph_state = create_state()
     
-    if "last_chunk" not in st.session_state:
-        st.session_state.last_chunk = None
+    the_messages = st.session_state.graph_state['messages']
+    the_current = st.session_state.graph_state['current']
+
+    logger.info(f"Messages: {the_messages}")
+    logger.info(f"Current: {the_current}")
     
     # Initialize system on first run
     if st.session_state.graph_state is None:
         with st.spinner("Initializing system..."):
             initialize_langsmith()
             st.session_state.graph_state = create_state()
+
+    logger.info(f"Messages: {the_messages}")
     
     # Display chat messages
-    for message in st.session_state.messages:
-        if message["role"] == "user":
-            st.chat_message("user").write(message["content"])
+    for message in the_messages:
+        if message.type == "human":
+            st.chat_message("user").write(message.content)
         else:
-            st.chat_message("assistant").write(message["content"])
+            # Check if this is a tool response
+            if "Tool Response:" in message.content:
+                # Display tool responses with a different style
+                with st.chat_message("assistant"):
+                    st.markdown("🔧 **Tool Response**")
+                    st.write(message.content.replace("Tool Response: ", ""))
+            else:
+                st.chat_message("assistant").write(message.content)
     
     # Chat input
     if prompt := st.chat_input("Type your message here..."):
         # Add user message to chat
-        st.session_state.messages.append({"role": "user", "content": prompt})
+        the_messages.append(HumanMessage(content=prompt))
         st.chat_message("user").write(prompt)
         
         # Process message
         with st.spinner("Processing..."):
-            response, st.session_state.graph_state, agent_name = process_message(
-                prompt, 
+            response, agent_name = process_message(
                 st.session_state.graph_state
             )
         
         # Add assistant response to chat
-        st.session_state.messages.append({"role": "assistant", "content": f"**{agent_name}**: {response}"})
-        st.chat_message("assistant").write(f"**{agent_name}**: {response}")
+        the_messages.append(response)
+        the_current = agent_name
+
+        # print messages
+        st.chat_message("assistant").write(f"**{agent_name}**: {response.content}")
+
+        st.session_state.graph_state["messages"] = the_messages
+        st.session_state.graph_state["current"] = the_current
     
+    logger.info(f"Messages: {the_messages}")
+
     # Sidebar with controls
     with st.sidebar:
         st.header("Controls")
         
         # Clear chat button
         if st.button("🗑️ Clear Chat"):
-            st.session_state.messages = []
+            the_messages = []
+            the_current = "start"
             st.session_state.graph_state = create_state()
-            st.session_state.last_chunk = None
             st.rerun()
         
         # Show current state info
@@ -162,13 +144,17 @@ def main():
         if st.session_state.graph_state:
             st.write(f"Messages in state: {len(st.session_state.graph_state.get('messages', []))}")
             st.write(f"Current agent: {st.session_state.graph_state.get('current', 'N/A')}")
-            st.write(f"Chat messages: {len(st.session_state.messages)}")
+            st.write(f"Chat messages: {len(the_messages)}")
+            
+            # Show message types in current state
+            if "messages" in st.session_state.graph_state:
+                message_types = []
+                for msg in st.session_state.graph_state["messages"]:
+                    if hasattr(msg, 'type'):
+                        message_types.append(msg.type)
+                if message_types:
+                    st.write(f"Message types: {', '.join(message_types[-5:])}")  # Show last 5
         
-        # Debug: Show last chunk details
-        if st.session_state.last_chunk:
-            st.header("Debug: Last Chunk")
-            with st.expander("View chunk details"):
-                st.json(st.session_state.last_chunk)
         
         # Help section
         st.header("Help")

@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from dateutil import parser
 from collections.abc import Mapping
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
 from typing import List, Dict, Any, Union
 from pydantic import BaseModel
 
@@ -275,10 +275,13 @@ def format_message(text: str) -> str:
     
     return the_message
 
-def format_conversation_history(messages: List[Union[SystemMessage, HumanMessage, AIMessage]]) -> str:
+def format_conversation_history(messages: List[Union[SystemMessage, HumanMessage, AIMessage, ToolMessage]]) -> str:
     formatted_messages = []
     for message in messages:
-        if isinstance(message, SystemMessage):
+        # also include tool messages
+        if isinstance(message, ToolMessage):
+            formatted_messages.append(f"Tool: {message.content}")
+        elif isinstance(message, SystemMessage):
             formatted_messages.append(f"System: {message.content}")
         elif isinstance(message, HumanMessage):
             formatted_messages.append(f"Human: {message.content}")

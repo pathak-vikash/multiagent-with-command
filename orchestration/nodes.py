@@ -52,7 +52,9 @@ def appointment(state: State) -> State:
         
     except Exception as e:
         logger.error(f"Error in appointment sub-graph: {str(e)}")
-        raise
+        return {
+            "current": state.get("current", "appointment")
+        }
 
 def support(state: State) -> State:
     """Support agent node."""
@@ -68,7 +70,9 @@ def support(state: State) -> State:
         
     except Exception as e:
         logger.error(f"Error in support sub-graph: {str(e)}")
-        raise
+        return {
+            "current": state.get("current", "support")
+        }
 
 def estimate(state: State) -> State:
     """Estimate agent node."""
@@ -84,7 +88,9 @@ def estimate(state: State) -> State:
         
     except Exception as e:
         logger.error(f"Error in estimate sub-graph: {str(e)}")
-        raise
+        return {
+            "current": state.get("current", "estimate")
+        }
 
 def advisor(state: State) -> State:
     """Advisor agent node."""
@@ -100,7 +106,9 @@ def advisor(state: State) -> State:
         
     except Exception as e:
         logger.error(f"Error in advisor sub-graph: {str(e)}")
-        raise
+        return {
+            "current": state.get("current", "advisor")
+        }
 
 # Export all nodes with proper state management
 __all__ = [
