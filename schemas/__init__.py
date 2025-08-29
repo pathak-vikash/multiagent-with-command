@@ -1,1 +1,1 @@
-# Schemas package for type-safe data structures
+# Schemas package for data models and type definitions

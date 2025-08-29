@@ -1,13 +1,18 @@
 import traceback
 import re
+from datetime import datetime
+from typing import Literal
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import AIMessage
 from langgraph.graph import MessagesState
-from langgraph.prebuilt import create_react_agent
+from langgraph.prebuilt import ToolNode
 from tools.appointment_tools import create_appointment, check_availability, reschedule_appointment
+from utils import load_template, to_plain_dict
 from utils.llm_helpers import create_llm_client
 from utils.conversation_formatter import format_recent_conversation
 from core.logger import logger
 from .state import AppointmentState
+from .response_format import SOPExecutionResult
 
 def sop_collector(state) -> AppointmentState:
     try:
@@ -19,167 +24,219 @@ def sop_collector(state) -> AppointmentState:
         
         conversation_context = format_recent_conversation(state["messages"], exclude_last=1)
         
-        if hasattr(state, 'set_workflow_step'):
-            state.set_workflow_step("sop_collection")
-        
         llm = create_llm_client()
+
+        # Get template and context data
+        sop_prompt_template = load_template("sop_enforcer")
+        sop_checklists = load_template(f"sop_checklists/appointment")
+
         
-        agent = create_react_agent(
-            model=llm,
-            tools=[],
-            prompt=(
-                "You are a SOP (Standard Operating Procedure) Collector agent. Your role is to ensure ALL 5 SOPs are completed before any appointment can be booked.\n\n"
-                "CRITICAL: You must collect and validate these 5 SOPs in order:\n\n"
-                "1. **AGENDA:** Ask the user to clearly state the purpose of the appointment.\n"
-                "   - What is the main reason for this appointment?\n"
-                "   - What specific issue or service do they need?\n\n"
-                "2. **SERVICE:** Based on the agenda, determine the type of service.\n"
-                "   - If unsure, present this list and ask user to select:\n"
-                "     * inspection, repair, maintenance, installation, replacement, consultation, other\n"
-                "   - Validate that the service type is from the allowed list\n\n"
-                "3. **TIMING:** Collect preferred dates and time.\n"
-                "   - Ask for specific date and time preferences\n"
-                "   - Ensure the date and time are in the future, not the past\n"
-                "   - Format should be YYYY-MM-DD HH:MM\n\n"
-                "4. **LOCATION:** Confirm service location.\n"
-                "   - If user already shared location in context or profile, use and confirm that location\n"
-                "   - If not shared, ask for location (city, state, or country)\n\n"
-                "5. **CONTACT:** Confirm user communication preferences.\n"
-                "   - Ask for email or phone number for appointment details and updates\n"
-                "   - Validate the contact format\n\n"
-                "Previous conversation context:\n"
-                f"{conversation_context}\n\n"
-                "Current user request: {task_description}\n\n"
-                "Instructions:\n"
-                "- Systematically go through each SOP one by one\n"
-                "- If any SOP information is missing, ask for it specifically\n"
-                "- If user provides multiple SOPs at once, acknowledge all and ask for any missing ones\n"
-                "- Be conversational and reference previous parts of the conversation when relevant\n"
-                "- Validate each piece of information as it's provided\n"
-                "- Once ALL 5 SOPs are confirmed, summarize them and indicate readiness for booking\n"
-                "- Do NOT proceed to booking - that's handled by a separate agent\n"
-                "- If user tries to skip SOPs, politely insist on completing them\n\n"
-                "Response format when all SOPs are complete:\n"
-                "✅ All SOPs collected successfully!\n"
-                "📋 Agenda: [purpose]\n"
-                "🔧 Service: [service_type]\n"
-                "📅 Date: [date]\n"
-                "🕐 Time: [time]\n"
-                "📍 Location: [location]\n"
-                "📞 Contact: [contact]\n\n"
-                "Ready to proceed with appointment booking.\n\n"
-                "Respond in a helpful, professional manner that builds upon the conversation context."
-            ),
-            name="sop_collector_agent"
-        )
+        # existing state values.
+        previous_sop_state = state.get("sop_steps", [])
+            
+        # Construct prompt and messages
+        inputs = {
+            "last_message": task_description,
+            "conversation_history": conversation_context,
+            "previous_sop_state": previous_sop_state,
+            "sop_checklists": sop_checklists
+        }
+
+        messages = [("system", sop_prompt_template)]
+        sop_prompt = ChatPromptTemplate.from_messages(messages)
+
+        # Execute SOP enforcement chain using updated output (EnforceSop now is updated to SOPExecutionResult)
+        sop_chain = sop_prompt | llm.with_structured_output(SOPExecutionResult, method="function_calling")
+        result: SOPExecutionResult = sop_chain.invoke(inputs)
+
+        sop_steps = to_plain_dict(result.sop_steps)
+
+        # Filter pending SOP steps that have input mapping
+        pending_sop_steps = {
+            key: value for key, value in sop_steps.items() 
+            if value.get('status') == 'pending'
+        }
+
+        to_response = ""
+
+        if len(pending_sop_steps) > 0:
+            first_pending_step = next(iter(pending_sop_steps.items()), None)
+            to_response = first_pending_step[1].get('question', '')
+            logger.info(f"SOP Collector: Asking for {first_pending_step[0]} - {to_response}")
         
-        response = agent.invoke(state)
-        return response
+        # Return complete state with messages integrated
+        updated_state = {
+            **state,  # Keep all existing state
+            "sop_steps": sop_steps,
+            "adherence_percentage": result.adherence_percentage,
+            "should_route": result.should_route,
+        }
+        
+        # Add the AI response to messages
+        if to_response:
+            updated_state["messages"].append(AIMessage(content=to_response))
+        
+        return updated_state
         
     except Exception as e:
         logger.error(f"Error in SOP Collector agent: {str(e)}")
         raise
 
-def extract_sop_info_from_context(messages):
-    sop_info = {
-        'agenda': None,
-        'service': None,
-        'date': None,
-        'time': None,
-        'location': None,
-        'contact': None
-    }
-    
-    for msg in reversed(messages[-3:]):
-        content = msg.content if hasattr(msg, 'content') else str(msg)
+def should_enforce_sop(state) -> Literal["sop_collector", "booking_agent"]:
+    """Determine if SOP enforcement should continue or move to booking"""
+    try:
+        # Check if SOP enforcement is complete
+        should_route = state.get("should_route", False)
+        adherence_percentage = state.get("adherence_percentage", 0.0)
         
-        if "✅ All SOPs collected successfully!" in content:
-            agenda_match = re.search(r'📋 Agenda: (.+)', content)
-            if agenda_match:
-                sop_info['agenda'] = agenda_match.group(1).strip()
+        # If SOP is complete (should_route=True) or adherence is 100%, move to booking
+        if should_route or adherence_percentage >= 100.0:
+            return "booking_agent"
+        else:
+            return "sop_collector"
             
-            service_match = re.search(r'🔧 Service: (.+)', content)
-            if service_match:
-                sop_info['service'] = service_match.group(1).strip()
-            
-            date_match = re.search(r'📅 Date: (.+)', content)
-            if date_match:
-                sop_info['date'] = date_match.group(1).strip()
-            
-            time_match = re.search(r'🕐 Time: (.+)', content)
-            if time_match:
-                sop_info['time'] = time_match.group(1).strip()
-            
-            location_match = re.search(r'📍 Location: (.+)', content)
-            if location_match:
-                sop_info['location'] = location_match.group(1).strip()
-            
-            contact_match = re.search(r'📞 Contact: (.+)', content)
-            if contact_match:
-                sop_info['contact'] = contact_match.group(1).strip()
-            
-            break
-    
-    return sop_info
+    except Exception as e:
+        logger.error(f"Error in should_enforce_sop: {str(e)}")
+        return "sop_collector"
 
 def booking_agent(state) -> AppointmentState:
+    """Agent node following official LangGraph pattern"""
     try:
         if not state["messages"]:
             return state
             
+        # Extract context from state
         last_message = state["messages"][-1]
         task_description = last_message.content if hasattr(last_message, 'content') else str(last_message)
+        sop_steps = state.get("sop_steps", {})
+        today = datetime.now().strftime("%Y-%m-%d")
         
-        conversation_context = format_recent_conversation(state["messages"], exclude_last=1)
+        logger.info(f"Booking agent processing: {task_description}")
         
-        if hasattr(state, 'set_workflow_step'):
-            state.set_workflow_step("appointment_booking")
+        # Check if this is a tool response and increment retry counter
+        current_retry = state.get("retry_count", 0)
+        if hasattr(last_message, 'tool_call_id') and last_message.tool_call_id:
+            current_retry += 1
+            logger.info(f"Retry count: {current_retry}")
         
-        sop_info = extract_sop_info_from_context(state["messages"])
+        # Update state with retry count
+        state["retry_count"] = current_retry
         
-        if hasattr(state, 'set_sop_data'):
-            for key, value in sop_info.items():
-                if value:
-                    state.set_sop_data(key, value)
+        # Load and process template with variables
+        template_content = load_template("appointment")
         
+        # Format SOP steps for template
+        sop_steps_formatted = ""
+        if sop_steps:
+            for step_name, step_data in sop_steps.items():
+                status = step_data.get('status', 'unknown')
+                value = step_data.get('value', '')
+                sop_steps_formatted += f"- {step_name}: {status} (value: {value})\n"
+        
+        try:
+            processed_template = template_content.format(
+                today=today,  # Only send today for date reference
+                last_message=task_description,
+                sop_steps=sop_steps_formatted
+            )
+        except KeyError as e:
+            logger.warning(f"Template variable not found: {e}, using raw template")
+            processed_template = template_content
+        except Exception as e:
+            logger.error(f"Error processing template: {e}")
+            processed_template = template_content
+        
+        # Create LLM with tools - following reference pattern exactly
         llm = create_llm_client()
         tools = [create_appointment, check_availability, reschedule_appointment]
+        llm_with_tools = llm.bind_tools(tools)
         
-        agent = create_react_agent(
-            model=llm,
-            tools=tools,
-            prompt=(
-                "You are an Appointment Booking agent. Your role is to handle the actual appointment booking process AFTER all SOPs have been collected and validated.\n\n"
-                "Available tools:\n"
-                "- create_appointment(date, time, service, agenda, location, contact): Create a new appointment with all SOP information\n"
-                "- check_availability(date): Check available slots for a date\n"
-                "- reschedule_appointment(appointment_id, new_date, new_time): Reschedule existing appointment\n\n"
-                "Previous conversation context:\n"
-                f"{conversation_context}\n\n"
-                "Current user request: {task_description}\n\n"
-                "Extracted SOP information from context:\n"
-                f"- Agenda: {sop_info['agenda'] or 'Not found'}\n"
-                f"- Service: {sop_info['service'] or 'Not found'}\n"
-                f"- Date: {sop_info['date'] or 'Not found'}\n"
-                f"- Time: {sop_info['time'] or 'Not found'}\n"
-                f"- Location: {sop_info['location'] or 'Not found'}\n"
-                f"- Contact: {sop_info['contact'] or 'Not found'}\n\n"
-                "Instructions:\n"
-                "- If all SOP information is available, proceed with creating the appointment\n"
-                "- Use the create_appointment tool with all the collected SOP information\n"
-                "- If any SOP information is missing, inform the user that SOPs need to be completed first\n"
-                "- If the user wants to check availability, use the check_availability tool\n"
-                "- If the user wants to reschedule, use the reschedule_appointment tool\n"
-                "- Be professional and confirm the appointment details after creation\n"
-                "- Provide the appointment ID and next steps to the user\n\n"
-                "Respond in a helpful, professional manner that builds upon the conversation context."
-            ),
-            name="appointment_booking_agent"
+        # Following reference pattern: use ChatPromptTemplate with SystemMessagePromptTemplate
+        from langchain_core.prompts import SystemMessagePromptTemplate
+        
+        messages = [SystemMessagePromptTemplate.from_template(processed_template)]
+        prompt = ChatPromptTemplate.from_messages(messages)
+        
+        # Create formatted messages using the template (following reference pattern)
+        context_vars = {
+            "today": today,
+            "last_message": task_description,
+            "sop_steps": sop_steps_formatted
+        }
+        
+        formatted_messages = prompt.format_messages(**context_vars)
+        formatted_messages = formatted_messages + state["messages"]
+        
+        # Invoke with formatted messages (following reference pattern)
+        response = llm_with_tools.invoke(formatted_messages)
+        
+        # Create proper AIMessage with additional_kwargs (following reference pattern)
+        from langchain_core.messages import AIMessage
+        output = AIMessage(
+            content=response.content, 
+            additional_kwargs=response.additional_kwargs
         )
         
-        response = agent.invoke(state)
-        return response
+        # Log tool calls if present
+        if hasattr(output, 'additional_kwargs') and 'tool_calls' in output.additional_kwargs:
+            tool_calls = output.additional_kwargs.get('tool_calls', [])
+            if tool_calls:
+                logger.info(f"Tool calls detected: {len(tool_calls)}")
+                # Update processed tool calls to track usage
+                current_processed = state.get("processed_tool_calls", set())
+                tool_call_ids = {tc.get("id") for tc in tool_calls if tc.get("id")}
+                current_processed.update(tool_call_ids)
+                state["processed_tool_calls"] = current_processed
+        
+        # Return state with new message - following reference pattern
+        return {
+            **state,  # Keep all existing state
+            "retry_count": current_retry,  # Update retry count
+            "messages": [output]  # Add only the new response message
+        }
         
     except Exception as e:
         logger.error(f"Error in Appointment Booking agent: {str(e)}")
         raise
+
+def should_continue(state: AppointmentState) -> Literal["booking_tools", "end"]:
+    """Routing function following reference implementation pattern with proper tool call tracking"""
+    try:
+        messages = state.get("messages", [])
+        if not messages:
+            return "end"
+            
+        last_message = messages[-1]
+        
+        # Check retry counter to prevent infinite loops
+        retry_count = state.get("retry_count", 0)
+        if retry_count >= 3:
+            logger.warning(f"Maximum retry count ({retry_count}) reached, ending workflow")
+            return "end"
+        
+        # Check if there are pending tool calls (following reference pattern)
+        if not hasattr(last_message, 'additional_kwargs') or "tool_calls" not in last_message.additional_kwargs:
+            return "end"
+        
+        # Check if tool calls have been processed (following reference pattern)
+        processed_tool_calls = state.get("processed_tool_calls", set())
+        current_tool_calls = last_message.additional_kwargs.get("tool_calls", [])
+        current_tool_call_ids = {tc.get("id") for tc in current_tool_calls if tc.get("id")}
+        
+        if current_tool_call_ids.issubset(processed_tool_calls):
+            return "end"
+        
+        # Check if the last message is a tool response with an error
+        if hasattr(last_message, 'tool_call_id') and last_message.tool_call_id:
+            content = last_message.content if hasattr(last_message, 'content') else str(last_message)
+            
+            # Check if tool response indicates an error (starts with "Error:")
+            if content.strip().startswith("Error:"):
+                logger.warning(f"Tool error detected: {content}")
+                return "end"
+        
+        return "booking_tools"
+        
+    except Exception as e:
+        logger.error(f"Error in should_continue: {str(e)}")
+        return "end"

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# LangGraph Multi-Agent Supervisor System - Startup Script
+# LangGraph Multi-Agent Orchestration System - Startup Script
 # This script provides options to run either the Streamlit web interface
 # or the console interface.
 
@@ -99,26 +99,78 @@ run_streamlit() {
     python3 -m streamlit run streamlit_app.py --server.port 8501 --server.address localhost
 }
 
-# Function to run console interface
+# Function to run console interface (single input)
 run_console() {
     print_header "Starting Console Interface"
-    print_status "Running in interactive mode"
-    print_status "Type 'help' for example questions"
-    print_status "Type 'quit', 'exit', or 'bye' to end the session"
+    print_status "Enter your message and press Enter"
+    print_status "The system will process your input and respond"
     echo ""
     
-    # Run the main script
-    python3 main.py --interactive
+    # Run the main script (single input)
+    python3 main.py
 }
 
-# Function to run demo mode
-run_demo() {
-    print_header "Running Demo Mode"
-    print_status "This will run predefined examples to demonstrate the system"
+# Function to run interactive console (multiple inputs)
+run_interactive() {
+    print_header "Starting Interactive Console"
+    print_status "You can have a conversation with the system"
+    print_status "Type 'quit', 'exit', or 'bye' to end"
     echo ""
     
-    # Run the main script in demo mode
-    python3 main.py --demo
+    # Create a simple interactive loop
+    while true; do
+        echo -n "You: "
+        read -r user_input
+        
+        if [[ "$user_input" =~ ^(quit|exit|bye|q)$ ]]; then
+            echo "Goodbye!"
+            break
+        fi
+        
+        if [[ -n "$user_input" ]]; then
+            # Create a temporary script to run main.py with input
+            echo "#!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
+from dotenv import load_dotenv
+
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
+
+from orchestration.graph import get as get_graph
+from orchestration.state import create as create_state
+from utils.llm_helpers import initialize_langsmith
+from langchain_core.messages import HumanMessage
+
+def main():
+    load_dotenv()
+    
+    if not os.getenv('OPENAI_API_KEY'):
+        print('Error: OPENAI_API_KEY required')
+        return
+    
+    initialize_langsmith()
+    
+    state = create_state()
+    state['messages'] = [HumanMessage(content='$user_input')]
+    
+    graph = get_graph()
+    for chunk in graph.stream(state):
+        if 'messages' in chunk and len(chunk['messages']) > 0:
+            last_message = chunk['messages'][-1]
+            if hasattr(last_message, 'type') and last_message.type == 'ai':
+                print(f'Assistant: {last_message.content}')
+                break
+
+if __name__ == '__main__':
+    main()" > temp_main.py
+            
+            python3 temp_main.py
+            rm temp_main.py
+            echo ""
+        fi
+    done
 }
 
 # Function to run tests
@@ -127,35 +179,59 @@ run_tests() {
     print_status "Testing graph composition and module imports..."
     echo ""
     
-    # Run the test script
-    python3 test_graph.py
+    # Test basic imports
+    python3 -c "
+import sys
+from pathlib import Path
+project_root = Path('.').absolute()
+sys.path.insert(0, str(project_root))
+
+try:
+    from orchestration.graph import get
+    from orchestration.state import create
+    from utils.llm_helpers import initialize_langsmith
+    print('✅ All imports successful')
+    
+    # Test graph creation
+    graph = get()
+    print('✅ Graph created successfully')
+    
+    # Test state creation
+    state = create()
+    print('✅ State created successfully')
+    
+    print('✅ All tests passed!')
+except Exception as e:
+    print(f'❌ Test failed: {e}')
+    sys.exit(1)
+"
 }
 
 # Function to show help
 show_help() {
-    print_header "LangGraph Multi-Agent Supervisor System"
+    print_header "LangGraph Multi-Agent Orchestration System"
     echo ""
     echo "Usage: $0 [OPTION]"
     echo ""
     echo "Options:"
     echo "  streamlit, web, s    Start Streamlit web interface (default)"
-    echo "  console, cli, c      Start console interface"
-    echo "  demo, d              Run demo mode with predefined examples"
+    echo "  console, cli, c      Start console interface (single input)"
+    echo "  interactive, i       Start interactive console (multiple inputs)"
     echo "  test, t              Run tests to verify installation"
     echo "  help, h              Show this help message"
     echo ""
     echo "Examples:"
     echo "  $0                   # Start Streamlit (default)"
-    echo "  $0 console           # Start console interface"
-    echo "  $0 demo              # Run demo mode"
+    echo "  $0 console           # Single input console"
+    echo "  $0 interactive       # Interactive console"
     echo "  $0 test              # Run tests"
     echo ""
     echo "Features:"
-    echo "  🤖 Multi-agent system with intelligent routing"
-    echo "  📅 Appointment booking and scheduling"
-    echo "  🎫 Customer support and warranty claims"
-    echo "  💰 Price quotes and estimates"
-    echo "  📋 Business information and recommendations"
+    echo "  Multi-agent system with intelligent routing"
+    echo "  Appointment booking and scheduling"
+    echo "  Customer support and warranty claims"
+    echo "  Price quotes and estimates"
+    echo "  Business information and recommendations"
     echo ""
 }
 
@@ -182,8 +258,8 @@ main() {
         "console"|"cli"|"c")
             run_console
             ;;
-        "demo"|"d")
-            run_demo
+        "interactive"|"i")
+            run_interactive
             ;;
         "test"|"t")
             run_tests

@@ -1,36 +1,25 @@
-from langgraph.graph import MessagesState
 from typing import Dict, Any, Optional, List, TypedDict, Annotated
 from operator import add
+from langchain_core.messages import BaseMessage
 from core.logger import logger
+from .schema import Node
 
-class OrchestrationState(TypedDict):
-    messages: Annotated[List[Any], add]
-    session_id: Optional[str]
-    user_id: Optional[str]
-    conversation_start: Optional[str]
-    current_agent: Optional[str]
-    routing_history: Annotated[List[str], add]
-    workflow_step: str
+class State(TypedDict):
+    current: str
+    messages: Annotated[List[BaseMessage], add]
     metadata: Dict[str, Any]
-
-class State(MessagesState):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self["session_id"] = None
-        self["user_id"] = None
-        self["conversation_start"] = None
-        self["current_agent"] = None
-        self["routing_history"] = []
-        self["workflow_step"] = "initial"
-        self["metadata"] = {}
-    
-    def add_routing_decision(self, agent_name: str) -> None:
-        current_history = self.get("routing_history", [])
-        self["routing_history"] = add(current_history, [agent_name])
-        self["current_agent"] = agent_name
-    
-    def set_workflow_step(self, step: str) -> None:
-        self["workflow_step"] = step
+    routing_history: Annotated[List[str], add]
+    sop_steps: Dict[str, Any]
+    adherence_percentage: float
+    should_route: bool
 
 def create() -> State:
-    return State()
+    return State(
+        current=Node.APPOINTMENT.value,
+        messages=[],
+        metadata={},
+        routing_history=[],
+        sop_steps={},
+        adherence_percentage=0.0,
+        should_route=False
+    )

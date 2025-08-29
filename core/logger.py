@@ -28,8 +28,7 @@ logger.add(
     compression=None,
     backtrace=True,
     diagnose=True,
-    enqueue=True,
-    filter=lambda record: record["name"].startswith(("agents.", "core.", "utils.", "graph", "streamlit_app", "main"))
+    enqueue=True
 )
 
 logger.add(
@@ -41,24 +40,22 @@ logger.add(
     compression=None,
     backtrace=True,
     diagnose=True,
-    enqueue=True,
-    filter=lambda record: record["name"].startswith(("agents.", "core.", "utils.", "graph", "streamlit_app", "main"))
+    enqueue=True
 )
 
 class InterceptHandler(logging.Handler):
     def emit(self, record):
-        if record.name.startswith(("agents.", "core.", "utils.", "graph", "streamlit_app", "main")):
-            try:
-                level = logger.level(record.levelname).name
-            except ValueError:
-                level = record.levelno
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
 
-            frame, depth = logging.currentframe(), 2
-            while frame.f_code.co_filename == logging.__file__:
-                frame = frame.f_back
-                depth += 1
+        frame, depth = logging.currentframe(), 2
+        while frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back
+            depth += 1
 
-            logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
 logging.basicConfig(handlers=[InterceptHandler()], level=logging.INFO, force=True)
 

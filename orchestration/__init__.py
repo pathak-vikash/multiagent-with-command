@@ -8,16 +8,16 @@ and sub-graph coordination for the multi-agent system.
 from .graph import (
     create,
     get,
-    get_info,
     reset
 )
 from .state import State, create as create_state
+from .schema import Node
 
 __all__ = [
     'create',
     'get', 
-    'get_info',
     'reset',
     'State',
-    'create_state'
+    'create_state',
+    'Node'
 ]

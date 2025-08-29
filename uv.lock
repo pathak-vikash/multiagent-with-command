@@ -357,6 +357,15 @@ wheels = [
 ]
 
 [[package]]
+name = "dotty-dictionary"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/73/dd/5488d458b1e56bd96f2ddd400a989180f67eebec6ca158f390ffbe1743aa/dotty_dictionary-1.2.0.tar.gz", hash = "sha256:035873367519439ab17af8a1b1fe84bd8bf3e7da77f2521c49e86f32c4bcc03a", size = 9690, upload-time = "2024-03-06T06:16:23.776Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e9/67/7a01141a9f59925980e3e0758705ad52cf56994bbbf6c346fe551232b4c6/dotty_dictionary-1.2.0-py3-none-any.whl", hash = "sha256:9a763d7a5146975ef03e5aa2b978aee43df97140adad9fee4c68f6d80fd36fbb", size = 9375, upload-time = "2024-03-06T06:16:22.17Z" },
+]
+
+[[package]]
 name = "executing"
 version = "2.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -930,6 +939,7 @@ name = "langgraph-tutorials"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "dotty-dictionary" },
     { name = "ipykernel" },
     { name = "langchain", extra = ["openai"] },
     { name = "langchain-core" },
@@ -947,6 +957,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "dotty-dictionary", specifier = ">=1.2.0" },
     { name = "ipykernel", specifier = ">=6.30.1" },
     { name = "langchain", extras = ["openai"], specifier = ">=0.3.27" },
     { name = "langchain-core", specifier = ">=0.3.75" },

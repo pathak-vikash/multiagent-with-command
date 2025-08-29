@@ -10,14 +10,11 @@ from .graph import (
     node,
     get
 )
-from .state import State, create as create_state
 from .nodes import supervisor
 
 __all__ = [
     'create',
     'node',
     'get',
-    'State',
-    'create_state',
     'supervisor'
 ]
